@@ -1,0 +1,23 @@
+# Environments & Secrets
+.env
+*.env
+
+# Python Caches & Compiled files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# System files & IDEs
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# User Memories & Runtime Data
+memories/
+transcriptions.txt
+*.log
+*.wav
+*.mp3
+chroma_db/
