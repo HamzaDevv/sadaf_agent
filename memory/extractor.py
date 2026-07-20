@@ -1,62 +1,70 @@
 """
-memory/extractor.py — Sadaf V4 Fast Structured Fact Extraction
+memory/extractor.py — Sadaf V6 Graph Fact, Edge & Contradiction Extraction
 
-V4 changes:
-  - Fact format uses "file" (filename) instead of "section" (section path)
-  - Uses groq_proxy instead of direct AsyncGroq client
-  - Model: llama-3.1-8b-instant (unchanged — fast, structured JSON)
-
-Each conversation turn is analyzed and facts extracted as:
-  {"file": "career.md", "key": "Job Title", "value": "Engineer"}
-
-This maps directly to MemoryFileStore.write_key(user_id, file, key, value).
+Extracts episodic events and semantic facts/edges.
+Detects conflicts/contradictions for belief updating.
 """
-import asyncio
 import json
 from groq_proxy import groq_proxy
 from config import CHAT_MODEL, PRIORITY_EXTRACTION
 
 EXTRACTION_PROMPT = """\
-You are a memory extraction engine for a personal AI assistant named Sadaf.
-Analyze the conversation interaction and extract structured facts about the user
-to save into long-term memory files.
+You are a cognitive memory extraction engine for a personal AI assistant named Sadaf.
+Analyze the conversation interaction and existing user memory nodes. Extract:
+1. An episodic event log (raw interaction summary with an emotion and salience score [0.0-1.0]).
+2. Structured semantic facts (nodes) and relationships (edges). Assign a salience score [0.0-1.0] to each fact.
+3. Identify any CONTRADICTIONS with existing facts.
 
-Available memory files and what they store:
-- identity.md   → Full Name, Nickname, Age, Location, Language Preference
-- career.md     → Job Title, Company, Job Start Date, Colleagues, Salary
-- education.md  → College, Degree, Graduation Year, Courses
-- family.md     → Family Members, Relationship Status, Partner Name
-- health.md     → Sleep Pattern, Diet, Exercise, Health Issues, Energy Level
-- interests.md  → Hobbies, Games, Music, Movies, Books, Sports, Food Preferences
-- goals.md      → Short-term Goals, Long-term Goals, Current Plans
-- behavior.md   → Communication Style, Humor Level, Preferred Topics, Things They Dislike
-- emotions.md   → Current Emotional State, Stress Triggers, What Cheers Them Up, Sensitive Topics
+Available memory sections:
+- identity   → Full Name, Age, Location, Language Preference
+- career     → Job Title, Company, Job Start Date, Colleagues, Salary
+- education  → College, Degree, Graduation Year, Courses
+- family     → Family Members, Relationship Status, Partner Name
+- health     → Sleep Pattern, Diet, Exercise, Health Issues, Energy Level
+- interests  → Hobbies, Games, Music, Movies, Books, Sports, Food Preferences
+- goals      → Short-term Goals, Long-term Goals, Current Plans
+- behavior   → Communication Style, Humor Level, Preferred Topics, Things They Dislike
+- emotions   → Current Emotional State, Stress Triggers, What Cheers Them Up
 
 Output ONLY valid JSON (no explanation, no markdown fences):
 {
+  "episodic_event": {
+    "raw_text": "User visited Accenture office and felt excited.",
+    "emotion": "excited",
+    "salience": 0.8,
+    "contextual_triggers": ["accenture", "office"]
+  },
   "facts": [
-    {"file": "career.md", "key": "Job Title", "value": "Software Engineer"}
+    {"section": "career", "key": "company", "value": "Accenture", "salience": 0.9}
   ],
-  "emotional_state": "excited",
-  "session_note": "User mentioned starting their new job on July 24."
+  "edges": [
+    {"from_key": "company", "from_section": "career", "to_key": "start_date", "to_section": "career", "relation": "starts_on"}
+  ],
+  "contradictions": [
+    {
+      "node_id": "career:company",
+      "existing_value": "Google",
+      "new_value": "Accenture",
+      "salience": 0.9
+    }
+  ],
+  "session_note": "User mentioned starting their new job at Accenture."
 }
 
 Rules:
 - CRITICAL: Only extract facts EXPLICITLY stated in the interaction. Do NOT infer or invent.
-- CRITICAL: NEVER write "Unknown", "null", or "not explicitly stated" as a value. If a fact is not stated, simply DO NOT extract a JSON object for it. Omit it entirely.
-- If no new facts found: {"facts": [], "emotional_state": null, "session_note": null}
-- session_note: 1 sentence maximum summarizing the key event of this turn.
-- emotional_state: one of: happy, excited, sad, frustrated, neutral, anxious, calm, tired, angry, nervous
-- Do NOT extract trivial conversational filler (e.g., "User said hello").
+- CRITICAL: Compare new facts against the provided EXISTING MEMORY FACTS.
+- Contradictions: If a new fact directly contradicts an existing fact, list it in "contradictions". 
+- Assign a "salience" [0.0 - 1.0] for facts and contradictions. E.g., Job/Location = 0.9, recent food/mood = 0.3.
+- If no new facts found: {"episodic_event": null, "facts": [], "edges": [], "contradictions": [], "session_note": null}
 """
 
-
-async def extract_facts(user_input: str, ai_response: str) -> dict:
+async def extract_facts(user_input: str, ai_response: str, existing_facts_summary: str = "") -> dict:
     """
-    Extract structured facts from a conversation turn via groq_proxy.
+    Extract structured episodic and semantic facts from a conversation turn via groq_proxy.
     Returns a patch dict or empty dict on failure.
     """
-    interaction = f"User: {user_input}\nAI: {ai_response}"
+    interaction = f"EXISTING MEMORY FACTS:\n{existing_facts_summary or 'None'}\n\nCONVERSATION TURN:\nUser: {user_input}\nAI: {ai_response}"
     try:
         raw = await groq_proxy.call(
             model=CHAT_MODEL,
@@ -66,13 +74,20 @@ async def extract_facts(user_input: str, ai_response: str) -> dict:
             ],
             priority=PRIORITY_EXTRACTION,
             temperature=0.0,
-            max_tokens=400,
+            max_tokens=600,
             response_format={"type": "json_object"},
         )
         if not raw:
-            return {"facts": [], "emotional_state": None, "session_note": None}
+            return {"episodic_event": None, "facts": [], "edges": [], "contradictions": [], "session_note": None}
+            
         patch = json.loads(raw)
+        
+        # Ensure lists exist
+        if "facts" not in patch: patch["facts"] = []
+        if "edges" not in patch: patch["edges"] = []
+        if "contradictions" not in patch: patch["contradictions"] = []
+            
         return patch
     except (json.JSONDecodeError, Exception) as e:
         print(f"[Extractor] Failed to extract facts: {e}")
-        return {"facts": [], "emotional_state": None, "session_note": None}
+        return {"episodic_event": None, "facts": [], "edges": [], "contradictions": [], "session_note": None}

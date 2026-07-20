@@ -17,3 +17,8 @@ Pillow
 pytz
 tavily-python
 wikipedia
+# visualize
+pyvis
+networkx
+chromadb
+google-generativeai

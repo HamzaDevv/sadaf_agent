@@ -17,7 +17,7 @@ from collections import deque
 
 from audio import listen_once, transcribe_with_noise_reduction, speak_async_system
 from brain.llm import stream_sentences
-from memory.file_store import MemoryFileStore
+from memory.graph_store import MemoryGraphStore
 from memory.memory_agent import MemoryAgent
 from memory.consolidator import MemoryConsolidator
 from personality import build_system_prompt
@@ -84,12 +84,12 @@ async def run():
     buffer: deque = deque(maxlen=BUFFER_SIZE)
 
     # ── Initialize memory subsystems ─────────────────────────────────────────
-    file_store   = MemoryFileStore(MEMORY_DIR)
-    agent        = MemoryAgent(file_store)
-    consolidator = MemoryConsolidator(file_store)
+    graph_store  = MemoryGraphStore(MEMORY_DIR)
+    agent        = MemoryAgent(graph_store)
+    consolidator = MemoryConsolidator(graph_store)
 
-    file_store.ensure_user_dir(DEFAULT_USER_ID)
-    file_store.increment_conversation_count(DEFAULT_USER_ID)
+    graph_store.ensure_user_dir(DEFAULT_USER_ID)
+    graph_store.increment_conversation_count(DEFAULT_USER_ID)
 
     # ── Wire speak callback into tools that need it ───────────────────────────
     timer_set_speak_fn(speak_async_system)
