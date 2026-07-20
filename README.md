@@ -95,4 +95,4 @@ Sadaf_2/
 
 ## 📄 License
 
-MIT License. Built with ❤️ by [HamzaDevv](https://github.com/HamzaDevv).
+MIT License. Built with Love and Fun by [HamzaDevv](https://github.com/HamzaDevv).
