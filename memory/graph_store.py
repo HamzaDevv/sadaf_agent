@@ -1,7 +1,7 @@
 """
-memory/graph_store.py — Sadaf V6 Cognitive Graph Memory Engine
+memory/graph_store.py — Sadaf V6 Knowledge Graph & Vector Store
 
-Replaces V5 static graph with a dynamic cognitive graph featuring:
+Replaces old static graph with a dynamic cognitive graph featuring:
 - Pydantic schemas (MemoryNode, MemoryEdge, EpisodicEvent)
 - Lazy evaluation for cognitive decay and archival
 - ChromaDB vector storage with Gemini embeddings

@@ -35,8 +35,10 @@ from brain.vision import analyze_scene
 class ToolMatch:
     announcement: str
     tool_fn: Callable
+    tool_query: str
     is_async: bool = True
     needs_speak_fn: bool = False
+    consolidate_memory: bool = True
 
 @dataclass
 class ToolEntry:
@@ -46,6 +48,7 @@ class ToolEntry:
     announcement: str
     is_async: bool = True
     needs_speak_fn: bool = False
+    consolidate_memory: bool = True
 
 
 async def _camera_with_privacy(query: str, speak_fn: Callable = None) -> str:
@@ -93,6 +96,7 @@ TOOL_REGISTRY: list[ToolEntry] = [
         description="Check battery level, CPU usage, RAM, or disk space.",
         tool_fn=get_system_info,
         announcement="Running a quick system scan.",
+        consolidate_memory=False,
     ),
     ToolEntry(
         name="control_volume",
@@ -111,36 +115,42 @@ TOOL_REGISTRY: list[ToolEntry] = [
         description="Read what is currently copied on the clipboard, or copy new text to it.",
         tool_fn=clipboard_action,
         announcement="Checking your clipboard.",
+        consolidate_memory=False,
     ),
     ToolEntry(
         name="take_screenshot",
         description="Take a screenshot of the computer screen and optionally analyze what is on it.",
         tool_fn=take_screenshot,
         announcement="Taking a screenshot now.",
+        consolidate_memory=False,
     ),
     ToolEntry(
         name="camera_tool",
         description="Use the webcam to look at something, see what the user is holding, or identify an object in front of the camera.",
         tool_fn=_camera_with_privacy,
         announcement="Let me take a look at that.",
+        consolidate_memory=False,
     ),
     ToolEntry(
         name="get_weather",
         description="Check current weather, temperature, or rain forecast.",
         tool_fn=get_weather,
         announcement="Let me check the weather for you.",
+        consolidate_memory=False,
     ),
     ToolEntry(
         name="get_news",
         description="Fetch latest news headlines, optionally by topic.",
         tool_fn=get_news,
         announcement="Pulling up the latest news.",
+        consolidate_memory=False,
     ),
     ToolEntry(
         name="web_search",
         description="Search the internet or google something to find facts, information, or answers to questions.",
         tool_fn=web_search,
         announcement="Let me check that online for you.",
+        consolidate_memory=False,
     ),
     ToolEntry(
         name="pause_listening",
@@ -168,17 +178,18 @@ class ToolDispatcher:
         Agentic routing: Ask LLM which tool to use.
         Returns ToolMatch or None.
         """
-        system_prompt = f"""You are a tool routing engine.
+        system_prompt = f"""You are a tool orchestration engine.
 Based on the user's input, decide if a specific tool should be called.
-If none of the tools apply (e.g. general conversation, chat, or questions not covered by tools), output null.
+If a tool is needed, extract the exact query or parameter that the tool needs.
+For example, if the user says "search the web for artificial intelligence news", the tool_name is "web_search" and the tool_query is "artificial intelligence news".
 
 Available tools:
 {self.tool_descriptions}
 
 Output ONLY valid JSON in this format:
-{{"tool_name": "name_of_tool"}}
+{{"tool_name": "name_of_tool", "tool_query": "extracted_query_string"}}
 or if no tool applies:
-{{"tool_name": null}}
+{{"tool_name": null, "tool_query": null}}
 """
         try:
             raw = await groq_proxy.call(
@@ -189,7 +200,7 @@ or if no tool applies:
                 ],
                 priority=PRIORITY_AGENT,
                 temperature=0.0,
-                max_tokens=60,
+                max_tokens=80,
                 response_format={"type": "json_object"},
             )
             if not raw:
@@ -197,6 +208,7 @@ or if no tool applies:
             
             parsed = json.loads(raw)
             tool_name = parsed.get("tool_name")
+            tool_query = parsed.get("tool_query", "")
             
             if not tool_name or tool_name not in self.tools_map:
                 return None
@@ -211,8 +223,10 @@ or if no tool applies:
             return ToolMatch(
                 announcement=announcement,
                 tool_fn=entry.tool_fn,
+                tool_query=tool_query,
                 is_async=entry.is_async,
                 needs_speak_fn=entry.needs_speak_fn,
+                consolidate_memory=entry.consolidate_memory,
             )
         except Exception as e:
             print(f"[Dispatcher] Error: {e}")

@@ -1,7 +1,11 @@
 """
-main.py — Sadaf V5 (Jarvis Tool Suite Edition)
+main.py — Sadaf V6 (Cognitive Pre-Processor & Tool Orchestrator Edition)
 
-V5 changes:
+V6 changes:
+  - Cognitive Pre-Processor Subagent handles STT cleanup, intent, and emotion.
+  - Tool Orchestrator extracts exact query strings for tool functions.
+  - External tool context isolated from long-term memory graph.
+  - Spreading Activation Graph Memory System integration.
   - Full Tool Dispatcher replacing hardcoded vision keyword matching
   - 13 new tools: web search, news, weather, datetime, reminder, countdown,
     system info, app launcher, clipboard, screenshot, volume, calculator, timer
@@ -22,6 +26,7 @@ from memory.memory_agent import MemoryAgent
 from memory.consolidator import MemoryConsolidator
 from personality import build_system_prompt
 from tools.dispatcher import dispatcher
+from brain.pre_processor import analyze_input
 from tools.reminder import fire_pending_reminders
 from tools.timer_tool import set_speak_fn as timer_set_speak_fn
 from config import (
@@ -33,18 +38,6 @@ from config import (
     OUTPUT_FILE,
     PRIVACY_MODE,
 )
-
-
-# Exit keywords
-EXIT_PHRASES = [
-    "terminate", "goodbye", "bye", "allah hafiz", "اللہ حافظ",
-    "see you later", "shut down", "alif", "exit",
-]
-
-
-def _is_exit_phrase(text: str) -> bool:
-    lower = text.lower().strip()
-    return any(phrase in lower for phrase in EXIT_PHRASES)
 
 
 def _sync_write_transcript(text: str):
@@ -79,7 +72,7 @@ async def stream_and_speak(system_prompt: str, user_text: str) -> str:
 
 
 async def run():
-    print(f"\n🤖 {AI_NAME} V5 starting — Jarvis Tool Suite + groq proxy\n")
+    print(f"\n🤖 {AI_NAME} V6 starting — Cognitive Pre-Processor & Tool Orchestrator\n")
 
     buffer: deque = deque(maxlen=BUFFER_SIZE)
 
@@ -126,13 +119,27 @@ async def run():
             if not user_text:
                 continue
 
-            # ── Exit check ────────────────────────────────────────────────────
-            if _is_exit_phrase(user_text):
+            # ── Cognitive Pre-Processing ──────────────────────────────────────
+            analysis = await analyze_input(user_text)
+            clean_text = analysis["clean_text"]
+            intent = analysis["intent"]
+            emotion = analysis["emotion"]
+
+            # ── Exit / Pause checks ───────────────────────────────────────────
+            if intent == "exit":
                 await speak_async_system("Alright, take care. Allah hafiz.")
                 await save_transcript(f"User: {user_text}")
                 running = False
                 break
 
+            if intent == "pause":
+                _paused_mode = True
+                await speak_async_system("Alright, I'll be right here. Just say 'Sadaf' when you're ready.")
+                await save_transcript(f"User: {user_text}")
+                continue
+
+            # Use the cleaned text moving forward
+            user_text = clean_text
             await save_transcript(f"User: {user_text}")
 
             # ── PRIVACY_MODE camera gate ───────────────────────────────────────
@@ -181,16 +188,17 @@ async def run():
 
                 # Run the tool
                 try:
+                    query_to_pass = match.tool_query if match.tool_query else user_text
                     if match.needs_speak_fn:
                         if match.is_async:
-                            tool_result = await match.tool_fn(user_text, speak_fn=speak_async_system)
+                            tool_result = await match.tool_fn(query_to_pass, speak_fn=speak_async_system)
                         else:
-                            tool_result = match.tool_fn(user_text)
+                            tool_result = match.tool_fn(query_to_pass)
                     else:
                         if match.is_async:
-                            tool_result = await match.tool_fn(user_text)
+                            tool_result = await match.tool_fn(query_to_pass)
                         else:
-                            tool_result = match.tool_fn(user_text)
+                            tool_result = match.tool_fn(query_to_pass)
                 except Exception as e:
                     tool_result = f"Something went wrong with that. {e}"
 
@@ -203,14 +211,17 @@ async def run():
                 await save_transcript(f"User: {user_text}")
                 await save_transcript(f"Sadaf: {tool_result}")
                 buffer.append((user_text, tool_result))
-                asyncio.create_task(
-                    consolidator.consolidate(DEFAULT_USER_ID, user_text, tool_result)
-                )
+                
+                # Consolidate memory only if tool allows it (prevents side-context pollution)
+                if match.consolidate_memory:
+                    asyncio.create_task(
+                        consolidator.consolidate(DEFAULT_USER_ID, user_text, tool_result)
+                    )
                 continue
 
             # ── Standard LLM Response ─────────────────────────────────────────
             context = await agent.build_context(DEFAULT_USER_ID, buffer, user_text)
-            system_prompt = build_system_prompt(context)
+            system_prompt = build_system_prompt(context, user_emotion=emotion)
 
             full_response = await stream_and_speak(system_prompt, user_text)
 

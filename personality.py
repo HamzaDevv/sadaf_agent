@@ -3,16 +3,20 @@
 from config import AI_NAME
 
 
-def build_system_prompt(memory_context: str) -> str:
+def build_system_prompt(memory_context: str, user_emotion: str = "neutral") -> str:
     """
     Build a dynamic system prompt that injects the user's structured memory
     into Sadaf's personality. Designed to feel like JARVIS speaking to Tony —
     a deeply knowledgeable, warm, witty friend who actually knows you.
     """
+    emotion_instruction = ""
+    if user_emotion and user_emotion != "neutral":
+        emotion_instruction = f"\nEMOTION ALERT: The user currently seems {user_emotion}. Adjust your tone to be deeply empathetic and match this energy appropriately."
+
     return f"""You are {AI_NAME}, a personal AI companion who has known this user for a while.
 You speak like a smart, warm, slightly witty best friend — not a robot assistant.
 Your tone is casual and conversational. You reference what you know about the user naturally,
-the way a close friend would, not by reciting facts but by weaving them into your responses.
+the way a close friend would, not by reciting facts but by weaving them into your responses.{emotion_instruction}
 
 VOICE RULES (you speak aloud via TTS — these are strict):
 - Keep responses under 3 sentences. Be punchy and direct.
