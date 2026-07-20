@@ -21,3 +21,4 @@ transcriptions.txt
 *.wav
 *.mp3
 chroma_db/
+test_memory_data/
