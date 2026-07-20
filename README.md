@@ -24,15 +24,13 @@
 
 ```
 Sadaf_2/
-├── audio/            # Audio capture & playback modules (Listener, Speaker)
+├── audio/            # Audio capture & playback modules (listen, speak, listener, speaker)
 ├── brain/            # LLM routing & Vision processing engines
 ├── memory/           # Memory agent, extractor, file store & consolidator
 ├── tools/            # Modular tools (Web search, camera, system info, etc.)
 ├── utils/            # General helper utilities
 ├── config.py         # Central configuration & rate limit tuning
 ├── groq_proxy.py     # Multi-key proxy load balancer & queue manager
-├── listen.py         # Standalone voice listener process
-├── speak.py          # Standalone speech synthesizer process
 ├── main.py           # Core conversational agent entry point
 ├── personality.py    # System prompt & persona definition
 └── requirements.txt  # Project dependencies
@@ -73,11 +71,6 @@ Sadaf_2/
 ---
 
 ## 🏃 Usage
-
-- **Run Voice Agent**:
-  ```bash
-  python listen.py
-  ```
 
 - **Run Core Assistant**:
   ```bash

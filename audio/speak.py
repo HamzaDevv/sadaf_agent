@@ -1,9 +1,11 @@
+"""
+speak.py — Sadaf macOS TTS Synthesizer
+"""
 import os
 import asyncio
+import subprocess
 from config import VOICE, MAX_RESPONSE_WORDS
 
-
-import subprocess
 
 async def speak_async_system(text: str):
     """Fast, short macOS TTS using 'say' command."""

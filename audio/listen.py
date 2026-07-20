@@ -1,9 +1,9 @@
 """
-listen.py — Sadaf V4 Audio Input + Groq Whisper STT
+listen.py — Sadaf Audio Input + Groq Whisper STT
 
-V4 changes:
+Features:
   - Uses groq_proxy.transcribe() for STT (key rotation, retry on 429)
-  - Otherwise identical VAD + noise reduction pipeline
+  - VAD + noise reduction pipeline
 """
 import asyncio
 import io

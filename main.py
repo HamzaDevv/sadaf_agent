@@ -15,8 +15,7 @@ import random
 import time
 from collections import deque
 
-from listen import listen_once, transcribe_with_noise_reduction
-from speak import speak_async_system
+from audio import listen_once, transcribe_with_noise_reduction, speak_async_system
 from brain.llm import stream_sentences
 from memory.file_store import MemoryFileStore
 from memory.memory_agent import MemoryAgent
