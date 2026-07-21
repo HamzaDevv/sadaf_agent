@@ -8,9 +8,10 @@ memory/memory_agent.py — Sadaf V6 Spreading Activation Memory Traversal
 
 import json
 from collections import deque
+from typing import Optional, Union, Any
 from memory.graph_store import MemoryGraphStore
 from memory.schemas import MemoryNode
-from config import CHAT_MODEL, PRIORITY_AGENT
+from config import SUBAGENT_MODEL, PRIORITY_AGENT
 from groq_proxy import groq_proxy
 
 TRAVERSAL_PROMPT = """\
@@ -34,10 +35,21 @@ class MemoryAgent:
     def __init__(self, graph_store: MemoryGraphStore):
         self.store = graph_store
 
+    async def retrieve_context(
+        self,
+        user_id: str,
+        user_query: str = "",
+        buffer: Optional[Any] = None,
+    ) -> str:
+        """Retrieves memory context for the given user and query."""
+        if buffer is None:
+            buffer = []
+        return await self.build_context(user_id=user_id, buffer=buffer, user_query=user_query)
+
     async def build_context(
         self,
         user_id: str,
-        buffer: deque,
+        buffer: Union[deque, list],
         user_query: str = "",
     ) -> str:
         self.store.ensure_user_dir(user_id)
@@ -59,11 +71,17 @@ class MemoryAgent:
         traversed_context = await self._spreading_activation(user_id, user_query, all_nodes_dict)
 
         # 4. Short-term buffer
-        recent_turns = list(buffer)[-5:]
+        recent_turns = list(buffer)[-5:] if buffer is not None else []
         buffer_context = ""
         if recent_turns:
-            lines = "\n".join(f"You: {u}\nSadaf: {a}" for u, a in recent_turns)
-            buffer_context = f"# This Conversation (last {len(recent_turns)} turns)\n{lines}"
+            formatted_lines = []
+            for item in recent_turns:
+                if isinstance(item, (tuple, list)) and len(item) == 2:
+                    formatted_lines.append(f"You: {item[0]}\nSadaf: {item[1]}")
+                else:
+                    formatted_lines.append(str(item))
+            lines_str = "\n".join(formatted_lines)
+            buffer_context = f"# This Conversation (last {len(recent_turns)} turns)\n{lines_str}"
 
         # Assemble
         sections = [identity_context, traversed_context, recent_sessions, buffer_context]
@@ -140,7 +158,7 @@ class MemoryAgent:
         final_nodes = top_k
         try:
             raw = await groq_proxy.call(
-                model=CHAT_MODEL,
+                model=SUBAGENT_MODEL,
                 messages=[{"role": "user", "content": prompt}],
                 priority=PRIORITY_AGENT,
                 temperature=0.0,

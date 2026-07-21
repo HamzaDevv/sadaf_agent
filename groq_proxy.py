@@ -38,12 +38,9 @@ from groq import AsyncGroq
 from config import (
     GROQ_API_KEYS,
     CHAT_MODEL,
-    COMPLEX_MODEL,
     GROQ_TPM_8B,
     GROQ_TPM_70B,
     GROQ_RPM,
-    COMPLEX_QUERY_THRESHOLD,
-    COMPLEX_KEYWORDS,
     PRIORITY_CHAT,
     PRIORITY_EXTRACTION,
     PRIORITY_AGENT,
@@ -51,38 +48,8 @@ from config import (
 )
 
 
-# ──────────────────────────────────────────────────────────────────────────────
-# Model Complexity Router
-# ──────────────────────────────────────────────────────────────────────────────
-
-class ModelRouter:
-    """Decides whether a query needs the heavy 70b model or the fast 8b model."""
-
-    def complexity_score(self, query: str) -> float:
-        """
-        Score 0.0 → 1.0.
-        - Length contribution: normalized to ~0.0–0.4
-        - Keyword hit contribution: 0.15 per keyword (capped at 0.6)
-        """
-        if not query:
-            return 0.0
-        words = query.lower().split()
-        length_score = min(len(words) / 40.0, 0.4)
-        keyword_hits = sum(1 for kw in COMPLEX_KEYWORDS if kw in query.lower())
-        keyword_score = min(keyword_hits * 0.15, 0.6)
-        return length_score + keyword_score
-
-    def select_chat_model(self, query: str) -> str:
-        score = self.complexity_score(query)
-        model = COMPLEX_MODEL if score >= COMPLEX_QUERY_THRESHOLD else CHAT_MODEL
-        print(f"[Router] score={score:.2f} → {model.split('/')[-1]}")
-        return model
-
-    def is_8b(self, model: str) -> bool:
-        return "8b" in model or "instant" in model
-
-    def tpm_limit(self, model: str) -> int:
-        return GROQ_TPM_8B if self.is_8b(model) else GROQ_TPM_70B
+def _is_8b(model: str) -> bool:
+    return "8b" in model or "instant" in model
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -110,7 +77,7 @@ class KeyState:
         if self.remaining_requests <= 1:
             if now < self.reset_requests_at:
                 return False
-        remaining = self.remaining_tokens_8b if ModelRouter().is_8b(model) else self.remaining_tokens_70b
+        remaining = self.remaining_tokens_8b if _is_8b(model) else self.remaining_tokens_70b
         if remaining <= 100:  # Safety buffer
             if now < self.reset_tokens_at:
                 return False
@@ -119,7 +86,7 @@ class KeyState:
     def available_tokens(self, model: str) -> int:
         if not self.is_available(model):
             return 0
-        return self.remaining_tokens_8b if ModelRouter().is_8b(model) else self.remaining_tokens_70b
+        return self.remaining_tokens_8b if _is_8b(model) else self.remaining_tokens_70b
 
     def update_from_headers(self, headers: dict):
         """Parse x-ratelimit-* headers from Groq response."""
@@ -185,7 +152,6 @@ class GroqProxy:
         self.keys: list[KeyState] = [KeyState(k) for k in api_keys]
         self._rr_index: int = 0
         self._lock = asyncio.Lock()
-        self.router = ModelRouter()
 
     # ── Key Selection ─────────────────────────────────────────────────────────
 

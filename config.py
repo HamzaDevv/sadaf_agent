@@ -34,25 +34,11 @@ REMINDERS_FILE = os.path.join(os.path.dirname(__file__), "memories", "reminders.
 AI_NAME = "Sadaf"
 
 # ── Model Selection ───────────────────────────────────────────────────────────
-# Fast 8b: fact extraction, memory agent routing, vision compression, STT
-CHAT_MODEL   = "llama-3.1-8b-instant"      # Default chat model (simple queries)
-COMPLEX_MODEL = "llama-3.3-70b-versatile"  # Complex/emotional queries (uses 70b quota)
-SUMMARY_MODEL = "llama-3.1-8b-instant"     # Session compression (downgraded from 70b)
+BOSS_MODEL    = "llama-3.3-70b-versatile"  # Boss Orchestrator Agent
+SUBAGENT_MODEL = "llama-3.3-70b-versatile" # Subagents (Memory, Tool, Speaker, Pre-Processor)
+CHAT_MODEL    = "llama-3.1-8b-instant"     # Fallback chat model
 VISION_MODEL  = "qwen/qwen3.6-27b"         # Camera / Vision (multimodal)
 STT_MODEL     = "whisper-large-v3-turbo"   # Fast Groq speech-to-text
-
-# ── Model Routing ─────────────────────────────────────────────────────────────
-# Query complexity score ≥ this threshold → use COMPLEX_MODEL for chat
-COMPLEX_QUERY_THRESHOLD = 0.55
-
-# Question/reasoning words that boost complexity score
-COMPLEX_KEYWORDS = [
-    "why", "how", "explain", "understand", "think", "feel", "feeling",
-    "should", "would", "could", "help me", "advice", "reason",
-    "worried", "anxious", "scared", "confused", "frustrated", "depressed",
-    "excited", "nervous", "sad", "angry", "stress", "overwhelmed",
-    "plan", "decide", "difference", "compare", "analyze",
-]
 
 # ── Rate Limits (free tier, per org) ─────────────────────────────────────────
 # With 3 separate-org keys: effective TPM = 3× the per-org limit

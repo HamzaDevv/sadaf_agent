@@ -1,16 +1,10 @@
 """
-tools/dispatcher.py — Sadaf Jarvis Tool Dispatcher (Agentic Edition)
+tools/registry.py — Sadaf Jarvis Tool Registry
 
-Uses an LLM (llama-3.1-8b-instant) to determine which tool to run
-based on a description of the tools. No more regex/keyword matching!
+Defines the available tools and their metadata.
 """
-import asyncio
-import json
 from dataclasses import dataclass
-from typing import Callable, Optional
-
-from config import PRIVACY_MODE, CHAT_MODEL, PRIORITY_AGENT
-from groq_proxy import groq_proxy
+from typing import Callable
 
 # ── Tool imports ─────────────────────────────────────────────────────────────
 from tools.web_search import web_search
@@ -29,33 +23,19 @@ from tools.timer_tool import set_timer
 from tools.pause_tool import pause_listening
 from brain.vision import analyze_scene
 
-
-# ── Tool entry dataclass ──────────────────────────────────────────────────────
-@dataclass
-class ToolMatch:
-    announcement: str
-    tool_fn: Callable
-    tool_query: str
-    is_async: bool = True
-    needs_speak_fn: bool = False
-    consolidate_memory: bool = True
-    needs_synthesis: bool = False
-
 @dataclass
 class ToolEntry:
     name: str
     description: str
     tool_fn: Callable
-    announcement: str
+    announcement: str = ""
     is_async: bool = True
     needs_speak_fn: bool = False
     consolidate_memory: bool = True
     needs_synthesis: bool = False
 
-
 async def _camera_with_privacy(query: str, speak_fn: Callable = None) -> str:
     return await analyze_scene(query)
-
 
 # ── TOOL REGISTRY ─────────────────────────────────────────────────────────────
 TOOL_REGISTRY: list[ToolEntry] = [
@@ -170,102 +150,3 @@ TOOL_REGISTRY: list[ToolEntry] = [
         is_async=False,
     ),
 ]
-
-
-# ── Agentic Dispatcher ────────────────────────────────────────────────────────
-class ToolDispatcher:
-    """Routes user queries using an LLM to select the best tool."""
-
-    def __init__(self):
-        self.tools_map = {t.name: t for t in TOOL_REGISTRY}
-        # Build tool description string for prompt
-        self.tool_descriptions = "\n".join(
-            f'- "{t.name}": {t.description}' for t in TOOL_REGISTRY
-        )
-
-    async def synthesize_response(self, user_query: str, tool_result: str) -> str:
-        """Subagent behavior: use an LLM to synthesize a natural answer from raw tool output."""
-        system_prompt = """You are Sadaf, a conversational AI.
-A background tool just gathered some information to answer the user's query.
-Based on the tool's output, provide a direct, natural, and concise answer to the user's query.
-Do NOT mention that you used a tool. Do NOT describe the entire tool output if it's not relevant. Just answer the query as naturally as possible, acting as a witty, smart best friend."""
-        prompt = f"USER QUERY: {user_query}\n\nTOOL OUTPUT:\n{tool_result}"
-        try:
-            raw = await groq_proxy.call(
-                model=CHAT_MODEL,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": prompt}
-                ],
-                priority=PRIORITY_AGENT,
-                temperature=0.3,
-                max_tokens=150
-            )
-            from utils import strip_think_tags
-            raw_clean = strip_think_tags(raw) if raw else ""
-            return raw_clean.strip() if raw_clean else tool_result
-        except Exception:
-            return tool_result
-
-    async def route(self, user_text: str) -> Optional[ToolMatch]:
-        """
-        Agentic routing: Ask LLM which tool to use.
-        Returns ToolMatch or None.
-        """
-        system_prompt = f"""You are a tool orchestration engine.
-Based on the user's input, decide if a specific tool should be called.
-If a tool is needed, extract the exact query or parameter that the tool needs.
-For example, if the user says "search the web for artificial intelligence news", the tool_name is "web_search" and the tool_query is "artificial intelligence news".
-
-Available tools:
-{self.tool_descriptions}
-
-Output ONLY valid JSON in this format:
-{{"tool_name": "name_of_tool", "tool_query": "extracted_query_string"}}
-or if no tool applies:
-{{"tool_name": null, "tool_query": null}}
-"""
-        try:
-            raw = await groq_proxy.call(
-                model=CHAT_MODEL,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_text},
-                ],
-                priority=PRIORITY_AGENT,
-                temperature=0.0,
-                max_tokens=80,
-                response_format={"type": "json_object"},
-            )
-            if not raw:
-                return None
-            
-            parsed = json.loads(raw)
-            tool_name = parsed.get("tool_name")
-            tool_query = parsed.get("tool_query", "")
-            
-            if not tool_name or tool_name not in self.tools_map:
-                return None
-
-            entry = self.tools_map[tool_name]
-
-            announcement = entry.announcement
-            # PRIVACY_MODE: camera asks permission instead of announcing
-            if entry.tool_fn is _camera_with_privacy and PRIVACY_MODE:
-                announcement = "May I use the camera to take a look?"
-
-            return ToolMatch(
-                announcement=announcement,
-                tool_fn=entry.tool_fn,
-                tool_query=tool_query,
-                is_async=entry.is_async,
-                needs_speak_fn=entry.needs_speak_fn,
-                consolidate_memory=entry.consolidate_memory,
-            )
-        except Exception as e:
-            print(f"[Dispatcher] Error: {e}")
-            return None
-
-
-# Singleton
-dispatcher = ToolDispatcher()

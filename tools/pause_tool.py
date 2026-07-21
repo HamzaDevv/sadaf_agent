@@ -14,11 +14,15 @@ def pause_listening(query: str = "") -> str:
     return "__PAUSE_MODE_TRIGGER__"
 
 async def should_resume(user_text: str) -> bool:
-    """Agentic check if the user wants to wake Sadaf from pause mode."""
+    """Agentic check if the user wants to resume interaction with Sadaf."""
     resume_prompt = (
-        "You are evaluating if a user is trying to wake up a voice assistant that is currently paused.\n"
-        "The user might say things like 'Sadaf', 'Okay Sadaf', 'I'm back', 'Resume', 'Are you there', etc.\n"
-        "Return JSON: {\"resume\": true} if they are trying to wake you up, or {\"resume\": false} if they are just talking to someone else."
+        "You are evaluating if a user utterance should wake or resume speaking to a voice assistant named Sadaf.\n"
+        "The user text could be a greeting, addressing the assistant, a question, a continuation of their thoughts, or speaking aloud.\n"
+        "Output valid JSON.\n"
+        "Rules:\n"
+        "- Return JSON: {\"resume\": true} if the user is addressing the AI, resuming conversation, asking a question, or speaking to the system.\n"
+        "- Return JSON: {\"resume\": false} ONLY if the user is explicitly speaking to a third person offline or telling someone else to ignore the AI.\n"
+        "When in doubt, output JSON: {\"resume\": true}."
     )
     try:
         raw_resume = await groq_proxy.call(
@@ -29,11 +33,11 @@ async def should_resume(user_text: str) -> bool:
             ],
             priority=PRIORITY_AGENT,
             temperature=0.0,
-            max_tokens=20,
+            max_tokens=30,
             response_format={"type": "json_object"},
         )
         parsed_resume = json.loads(raw_resume)
-        return parsed_resume.get("resume") is True
+        return parsed_resume.get("resume", True) is True
     except Exception as e:
         print(f"[Pause Check] Error: {e}")
-        return False
+        return True

@@ -60,18 +60,11 @@ async def get_news(query: str = "") -> str:
                 break
 
     articles = await asyncio.to_thread(_fetch_headlines, topic)
-
     if not articles:
-        return "I couldn't fetch the news right now. Check your internet or GNews quota."
+        return "I couldn't fetch the latest news right now."
 
-    lines = []
-    for i, art in enumerate(articles[:3], 1):
-        title = art.get("title", "").strip()
-        if title:
-            lines.append(f"{i}. {title}")
-
-    if not lines:
-        return "There are no headlines available right now."
-
-    intro = f"Here are the latest {'headlines' if not topic else topic + ' headlines'}."
-    return intro + " " + " Next, ".join(lines) + "."
+    output = "Latest News Headlines:\n\n"
+    for i, a in enumerate(articles, 1):
+        output += f"{i}. {a.get('title', 'Headline')}\n   URL: {a.get('url', '')}\n   Snippet: {a.get('description', '')}\n\n"
+        
+    return output

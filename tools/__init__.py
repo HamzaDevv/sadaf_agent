@@ -1,7 +1,6 @@
-"""Tools and Agentic Dispatcher package for Sadaf."""
-from tools.dispatcher import dispatcher, TOOL_REGISTRY
+"""Tool definitions and registry for Sadaf."""
+from tools.registry import TOOL_REGISTRY
 
 __all__ = [
-    "dispatcher",
     "TOOL_REGISTRY",
 ]

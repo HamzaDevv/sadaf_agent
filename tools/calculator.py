@@ -74,6 +74,8 @@ def _preprocess(expr: str) -> str:
     # Handle percentage: "15% of 200" → "0.15 * 200"
     expr = re.sub(r"(\d+(?:\.\d+)?)\s*%\s*of\s*(\d+(?:\.\d+)?)",
                   lambda m: f"{float(m.group(1)) / 100} * {m.group(2)}", expr)
+    expr = re.sub(r"(\d+(?:\.\d+)?)\s*percent\s*of\s*(\d+(?:\.\d+)?)",
+                  lambda m: f"{float(m.group(1)) / 100} * {m.group(2)}", expr)
     # Handle "x percent" standalone
     expr = re.sub(r"(\d+(?:\.\d+)?)\s*percent", lambda m: str(float(m.group(1)) / 100), expr)
     # Replace word operators

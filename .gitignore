@@ -22,3 +22,7 @@ transcriptions.txt
 *.mp3
 chroma_db/
 test_memory_data/
+
+# Testing Data & Reports
+tests/reports/
+tests/temp_data/
