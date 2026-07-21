@@ -53,6 +53,7 @@ Output ONLY valid JSON (no explanation, no markdown fences):
 
 Rules:
 - CRITICAL: Only extract facts EXPLICITLY stated in the interaction. Do NOT infer or invent.
+- CRITICAL: The user is speaking via a Speech-to-Text (STT) engine. Ignore obvious phonetic mishearings, garbled words, or fragmented phrases (e.g., extracting a random name like "Vince" when they meant "means"). Do NOT extract facts from broken or nonsensical sentences caused by STT errors.
 - CRITICAL: Compare new facts against the provided EXISTING MEMORY FACTS.
 - Contradictions: If a new fact directly contradicts an existing fact, list it in "contradictions". 
 - Assign a "salience" [0.0 - 1.0] for facts and contradictions. E.g., Job/Location = 0.9, recent food/mood = 0.3.

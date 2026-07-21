@@ -206,6 +206,9 @@ async def run():
                     _paused_mode = True
                     continue
 
+                if match.needs_synthesis:
+                    tool_result = await dispatcher.synthesize_response(user_text, tool_result)
+
                 print(f"Sadaf: {tool_result}")
                 await speak_async_system(tool_result)
                 await save_transcript(f"User: {user_text}")

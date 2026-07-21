@@ -4,8 +4,11 @@ import random
 
 
 def strip_think_tags(text: str) -> str:
-    """Remove <think>...</think> reasoning blocks from LLM output."""
-    return re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL).strip()
+    """Remove <think>...</think> reasoning blocks from LLM output, even if unclosed."""
+    text = re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL)
+    # Also strip if it starts a think block but never closes it
+    text = re.sub(r'<think>.*', '', text, flags=re.DOTALL)
+    return text.strip()
 
 
 def strip_markdown(text: str) -> str:

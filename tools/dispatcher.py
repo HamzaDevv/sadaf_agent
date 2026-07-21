@@ -39,6 +39,7 @@ class ToolMatch:
     is_async: bool = True
     needs_speak_fn: bool = False
     consolidate_memory: bool = True
+    needs_synthesis: bool = False
 
 @dataclass
 class ToolEntry:
@@ -49,6 +50,7 @@ class ToolEntry:
     is_async: bool = True
     needs_speak_fn: bool = False
     consolidate_memory: bool = True
+    needs_synthesis: bool = False
 
 
 async def _camera_with_privacy(query: str, speak_fn: Callable = None) -> str:
@@ -77,12 +79,14 @@ TOOL_REGISTRY: list[ToolEntry] = [
         tool_fn=get_datetime,
         announcement="",
         is_async=False,
+        needs_synthesis=True,
     ),
     ToolEntry(
         name="get_countdown",
         description="Calculate days remaining until an event or date (e.g. 'days until Friday', 'countdown to Christmas').",
         tool_fn=get_countdown,
         announcement="Let me check that for you.",
+        needs_synthesis=True,
     ),
     ToolEntry(
         name="calculate",
@@ -90,6 +94,7 @@ TOOL_REGISTRY: list[ToolEntry] = [
         tool_fn=calculate,
         announcement="",
         is_async=False,
+        needs_synthesis=True,
     ),
     ToolEntry(
         name="get_system_info",
@@ -97,6 +102,7 @@ TOOL_REGISTRY: list[ToolEntry] = [
         tool_fn=get_system_info,
         announcement="Running a quick system scan.",
         consolidate_memory=False,
+        needs_synthesis=True,
     ),
     ToolEntry(
         name="control_volume",
@@ -130,6 +136,7 @@ TOOL_REGISTRY: list[ToolEntry] = [
         tool_fn=_camera_with_privacy,
         announcement="Let me take a look at that.",
         consolidate_memory=False,
+        needs_synthesis=True,
     ),
     ToolEntry(
         name="get_weather",
@@ -137,6 +144,7 @@ TOOL_REGISTRY: list[ToolEntry] = [
         tool_fn=get_weather,
         announcement="Let me check the weather for you.",
         consolidate_memory=False,
+        needs_synthesis=True,
     ),
     ToolEntry(
         name="get_news",
@@ -144,6 +152,7 @@ TOOL_REGISTRY: list[ToolEntry] = [
         tool_fn=get_news,
         announcement="Pulling up the latest news.",
         consolidate_memory=False,
+        needs_synthesis=True,
     ),
     ToolEntry(
         name="web_search",
@@ -151,6 +160,7 @@ TOOL_REGISTRY: list[ToolEntry] = [
         tool_fn=web_search,
         announcement="Let me check that online for you.",
         consolidate_memory=False,
+        needs_synthesis=True,
     ),
     ToolEntry(
         name="pause_listening",
@@ -172,6 +182,30 @@ class ToolDispatcher:
         self.tool_descriptions = "\n".join(
             f'- "{t.name}": {t.description}' for t in TOOL_REGISTRY
         )
+
+    async def synthesize_response(self, user_query: str, tool_result: str) -> str:
+        """Subagent behavior: use an LLM to synthesize a natural answer from raw tool output."""
+        system_prompt = """You are Sadaf, a conversational AI.
+A background tool just gathered some information to answer the user's query.
+Based on the tool's output, provide a direct, natural, and concise answer to the user's query.
+Do NOT mention that you used a tool. Do NOT describe the entire tool output if it's not relevant. Just answer the query as naturally as possible, acting as a witty, smart best friend."""
+        prompt = f"USER QUERY: {user_query}\n\nTOOL OUTPUT:\n{tool_result}"
+        try:
+            raw = await groq_proxy.call(
+                model=CHAT_MODEL,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": prompt}
+                ],
+                priority=PRIORITY_AGENT,
+                temperature=0.3,
+                max_tokens=150
+            )
+            from utils import strip_think_tags
+            raw_clean = strip_think_tags(raw) if raw else ""
+            return raw_clean.strip() if raw_clean else tool_result
+        except Exception:
+            return tool_result
 
     async def route(self, user_text: str) -> Optional[ToolMatch]:
         """

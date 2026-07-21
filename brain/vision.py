@@ -75,7 +75,7 @@ async def _raw_vision_response(image_path: str, query: str) -> str:
             }
         ],
         temperature=0.3,
-        max_tokens=500,
+        max_tokens=1500,
     )
     return strip_think_tags(result or "")
 
@@ -110,7 +110,6 @@ async def analyze_scene(user_query: str) -> str:
     try:
         image_path = await asyncio.to_thread(_capture_frame)
         raw_response = await _raw_vision_response(image_path, user_query)
-        short_response = await _compress_vision_response(raw_response, user_query)
-        return short_response
+        return raw_response
     except Exception as e:
         return f"I couldn't use the camera right now. {e}"

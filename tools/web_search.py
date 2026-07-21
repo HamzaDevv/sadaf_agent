@@ -70,4 +70,4 @@ async def web_search(query: str) -> str:
     raw = await asyncio.to_thread(_tavily_search, query)
     if not raw:
         return "I couldn't find anything useful on that right now."
-    return await _compress_search_results(query, raw)
+    return raw
