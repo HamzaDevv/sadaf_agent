@@ -34,16 +34,23 @@ REMINDERS_FILE = os.path.join(os.path.dirname(__file__), "memories", "reminders.
 AI_NAME = "Sadaf"
 
 # ── Model Selection ───────────────────────────────────────────────────────────
-BOSS_MODEL    = "llama-3.3-70b-versatile"  # Boss Orchestrator Agent
-SUBAGENT_MODEL = "llama-3.3-70b-versatile" # Subagents (Memory, Tool, Speaker, Pre-Processor)
-CHAT_MODEL    = "llama-3.1-8b-instant"     # Fallback chat model
-VISION_MODEL  = "qwen/qwen3.6-27b"         # Camera / Vision (multimodal)
-STT_MODEL     = "whisper-large-v3-turbo"   # Fast Groq speech-to-text
+BOSS_MODEL     = "llama-3.3-70b-versatile"  # Boss Orchestrator only (routing + synthesis)
+SUBAGENT_MODEL = "llama-3.1-8b-instant"     # All subagents: pre-processor, memory, tool, speaker
+CHAT_MODEL     = "llama-3.1-8b-instant"     # Fallback chat model
+VISION_MODEL   = "meta-llama/llama-4-scout-17b-16e-instruct"  # Camera / Vision (multimodal)
+STT_MODEL      = "whisper-large-v3-turbo"   # Fast Groq speech-to-text
 
-# ── Rate Limits (free tier, per org) ─────────────────────────────────────────
+# ── Why this split? ─────────────────────────────────────────────────────────
+# 70b is only used for the boss orchestrator (routing + intent synthesis).
+# All other calls (pre-processor, memory, tool selection, speaker) use 8b
+# because they receive structured inputs and don't need deep reasoning.
+# This reduces 70b usage from ~5-6 calls/turn to 1, giving ~5× more headroom
+# on the free tier (6,000 TPM for 70b per org × 3 orgs = 18,000 TPM effective).
+
+# ── Rate Limits (Groq free tier, per org) ────────────────────────────────────
 # With 3 separate-org keys: effective TPM = 3× the per-org limit
-GROQ_TPM_8B  = 6_000   # llama-3.1-8b-instant: tokens per minute per org
-GROQ_TPM_70B = 12_000  # llama-3.3-70b-versatile: tokens per minute per org
+GROQ_TPM_8B  = 14_400  # llama-3.1-8b-instant: ~14,400 TPM free per org
+GROQ_TPM_70B = 6_000   # llama-3.3-70b-versatile: ~6,000 TPM free per org
 GROQ_RPM     = 30      # requests per minute per org (both models)
 
 # Request priority levels (lower = higher priority)
@@ -51,10 +58,34 @@ PRIORITY_CHAT       = 1
 PRIORITY_EXTRACTION = 2
 PRIORITY_AGENT      = 3
 
+# ── Boss Prompt Budget ───────────────────────────────────────────────────────
+# Prevents boss prompt from ballooning with long session context.
+# Memory context is hard-truncated to this many characters.
+BOSS_MEMORY_MAX_CHARS  = 600
+# Only the last N conversation buffer items are injected into the boss prompt.
+BOSS_HISTORY_MAX_TURNS = 6
+
+# ── Consolidator Retry (background memory extraction on 429) ──────────────────
+CONSOLIDATOR_MAX_RETRIES = 3
+CONSOLIDATOR_RETRY_DELAY = 45.0   # seconds; multiplied by attempt index
+
+# ── Pre-Processor Fast-Path ───────────────────────────────────────────────────
+# Regex detects intent category first; LLM confirms + cleans text second.
+# If the LLM confirmation is skipped (pure fast-path only), set to True.
+# Current: two-level — regex then LLM. This flag controls LLM confirmation.
+PRE_PROCESSOR_TWO_LEVEL = True
+
+# ── Proxy Token Pacing ────────────────────────────────────────────────────────
+# Silent wait threshold: if a request must wait longer than this, Sadaf speaks.
+PROXY_SILENT_WAIT_THRESHOLD_S = 3.0
+# Proactive spread: keep this fraction of TPM in reserve to avoid burst spikes.
+# e.g. 0.15 means use at most 85% of the bucket per-call burst.
+PROXY_BURST_RESERVE_FRACTION  = 0.15
+
 # ── Memory (Multi-File System) ────────────────────────────────────────────────
 MEMORY_DIR   = "./memories"
 DEFAULT_USER_ID = "sadaf_user"
-BUFFER_SIZE  = 10    # Recent conversation turns to keep in RAM
+BUFFER_SIZE  = 16    # Recent conversation turns to keep in RAM
 
 # Session compaction: compress oldest entries when sessions.md exceeds this
 SESSION_COMPACT_THRESHOLD = 50   # Total entries before compaction

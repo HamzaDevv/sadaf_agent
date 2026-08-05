@@ -31,11 +31,27 @@ class ToolEntry:
     announcement: str = ""
     is_async: bool = True
     needs_speak_fn: bool = False
+    needs_context: bool = False   # True → tool receives memory_context + user_name
     consolidate_memory: bool = True
     needs_synthesis: bool = False
 
 async def _camera_with_privacy(query: str, speak_fn: Callable = None) -> str:
     return await analyze_scene(query)
+
+
+async def _list_capabilities(query: str = "") -> str:
+    """
+    Builds a ground-truth capabilities list directly from this registry.
+    No LLM involved — cannot hallucinate.
+    """
+    lines = []
+    for tool in TOOL_REGISTRY:
+        if tool.name != "list_capabilities":  # Don't list self
+            lines.append(f"{tool.name}: {tool.description}")
+    return (
+        "Here is everything I can do:\n"
+        + "\n".join(f"- {l}" for l in lines)
+    )
 
 # ── TOOL REGISTRY ─────────────────────────────────────────────────────────────
 TOOL_REGISTRY: list[ToolEntry] = [
@@ -128,11 +144,12 @@ TOOL_REGISTRY: list[ToolEntry] = [
     ),
     ToolEntry(
         name="get_news",
-        description="Fetch latest news headlines, optionally by topic.",
+        description="Fetch latest news headlines, optionally by topic (e.g. 'tech news', 'cricket news').",
         tool_fn=get_news,
-        announcement="Pulling up the latest news.",
+        announcement="Let me pull up the latest news for you.",
+        needs_context=True,
         consolidate_memory=False,
-        needs_synthesis=True,
+        needs_synthesis=False,   # news_tool now returns TTS-ready text directly
     ),
     ToolEntry(
         name="web_search",
@@ -148,5 +165,14 @@ TOOL_REGISTRY: list[ToolEntry] = [
         tool_fn=pause_listening,
         announcement="Alright, I'll be right here. Just say 'Sadaf' when you're ready.",
         is_async=False,
+    ),
+    ToolEntry(
+        name="list_capabilities",
+        description="List all available actions, features, tools, and capabilities. Use this when the user asks what you can do, what tools you have, what actions are available, or anything similar.",
+        tool_fn=_list_capabilities,
+        announcement="",
+        is_async=True,
+        consolidate_memory=False,
+        needs_synthesis=True,
     ),
 ]

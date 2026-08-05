@@ -57,8 +57,17 @@ async def _raw_vision_response(image_path: str, query: str) -> str:
     """Call Groq Vision model via proxy and return the raw response."""
     b64 = await asyncio.to_thread(_encode_image, image_path)
 
-    # Vision model requires direct client (multimodal content type)
-    # groq_proxy.call() handles key rotation transparently
+    # Wrap the user's question so the vision model answers it specifically,
+    # rather than describing the entire scene.
+    vision_prompt = (
+        f'The user is showing something to the camera and asking: "{query}"\n\n'
+        "IMPORTANT: Answer the user\'s SPECIFIC QUESTION about what you see. "
+        "Do NOT describe the entire scene or the person. "
+        "Focus ONLY on what the user is asking about. "
+        "If they ask \'what am I holding?\' identify the object in their hand. "
+        "Be concise — 1-2 sentences maximum."
+    )
+
     from groq_proxy import groq_proxy as _proxy
     result = await _proxy.call(
         model=VISION_MODEL,
@@ -66,7 +75,7 @@ async def _raw_vision_response(image_path: str, query: str) -> str:
             {
                 "role": "user",
                 "content": [
-                    {"type": "text", "text": query},
+                    {"type": "text", "text": vision_prompt},
                     {
                         "type": "image_url",
                         "image_url": {"url": f"data:image/jpeg;base64,{b64}"},
@@ -106,10 +115,12 @@ async def _compress_vision_response(raw: str, query: str) -> str:
 
 
 async def analyze_scene(user_query: str) -> str:
-    """Full pipeline: capture → vision model → compress → return short spoken answer."""
+    """Full pipeline: capture → vision model (question-aware) → compress → return short spoken answer."""
     try:
         image_path = await asyncio.to_thread(_capture_frame)
         raw_response = await _raw_vision_response(image_path, user_query)
-        return raw_response
+        # Compress verbose vision response into 1-2 TTS-friendly sentences
+        compressed = await _compress_vision_response(raw_response, user_query)
+        return compressed
     except Exception as e:
         return f"I couldn't use the camera right now. {e}"

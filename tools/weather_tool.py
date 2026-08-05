@@ -22,8 +22,28 @@ WMO_CODES = {
 }
 
 
-def _get_location() -> dict:
-    """Auto-detect city/lat/lon via IP geolocation."""
+def _get_location(query: str = "") -> dict:
+    """Auto-detect city/lat/lon via IP geolocation or query."""
+    import re
+    if query:
+        match = re.search(r"(?:in|for|at)\s+([a-zA-Z\s]+)", query, re.IGNORECASE)
+        if match:
+            city_query = match.group(1).strip()
+            # Stop if the extracted part is too short or just filler
+            if len(city_query) > 2:
+                try:
+                    geo_url = f"https://geocoding-api.open-meteo.com/v1/search?name={city_query}&count=1"
+                    resp = requests.get(geo_url, timeout=4).json()
+                    if resp.get("results"):
+                        res = resp["results"][0]
+                        return {
+                            "city": res.get("name", city_query),
+                            "lat": res.get("latitude"),
+                            "lon": res.get("longitude"),
+                        }
+                except Exception:
+                    pass
+
     try:
         resp = requests.get(IP_API, timeout=4).json()
         if resp.get("status") == "success":
@@ -62,7 +82,7 @@ def _get_weather(lat: float, lon: float) -> dict:
 
 async def get_weather(query: str = "") -> str:
     """Return spoken-English current weather for the user's location."""
-    loc = await asyncio.to_thread(_get_location)
+    loc = await asyncio.to_thread(_get_location, query)
     if loc["lat"] is None:
         return "I couldn't detect your location to check the weather."
 

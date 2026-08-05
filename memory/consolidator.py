@@ -10,131 +10,149 @@ import asyncio
 from memory.graph_store import MemoryGraphStore
 from memory.extractor import extract_facts
 from memory.schemas import EpisodicEvent, MemoryNode
+from config import CONSOLIDATOR_MAX_RETRIES, CONSOLIDATOR_RETRY_DELAY
 
 class MemoryConsolidator:
     def __init__(self, graph_store: MemoryGraphStore):
         self.store = graph_store
 
-    async def consolidate(self, user_id: str, user_input: str, ai_response: str):
+    async def consolidate(self, user_id: str, user_input: str, ai_response: str, _attempt: int = 0):
         """
-        Consolidation pipeline:
-          1. Extract episodic and semantic facts
-          2. Log Episodic Event
-          3. Process soft contradictions (belief updating)
-          4. Upsert Semantic Nodes
-          5. Add Edges
-          6. Lazy Evaluate Provisional Nodes
+        Consolidation pipeline with retry-on-429.
+        If the Groq call fails due to rate limiting, reschedules itself with
+        exponential backoff up to CONSOLIDATOR_MAX_RETRIES times.
+        Facts are never permanently lost due to transient quota exhaustion.
         """
         try:
-            # Stage 0: Fetch existing nodes summary for comparison
-            existing_summary = await asyncio.to_thread(self.store.get_nodes_summary, user_id)
-
-            # Stage 1: Extract facts
-            patch = await extract_facts(user_input, ai_response, existing_summary)
-
-            ep_data = patch.get("episodic_event")
-            facts = patch.get("facts", [])
-            edges = patch.get("edges", [])
-            contradictions = patch.get("contradictions", [])
-            session_note = patch.get("session_note")
-
-            # Stage 2: Append Episodic
-            if ep_data:
-                ep = EpisodicEvent(
-                    event_id=str(uuid.uuid4()),
-                    raw_text=ep_data.get("raw_text", ""),
-                    emotion=ep_data.get("emotion"),
-                    salience=ep_data.get("salience", 0.5),
-                    contextual_triggers=ep_data.get("contextual_triggers", [])
-                )
-                await asyncio.to_thread(self.store.append_episode, user_id, ep)
-
-            # Stage 3: Handle Contradictions (Belief Updating)
-            for c in contradictions:
-                node_id = c.get("node_id")
-                new_val = c.get("new_value")
-                salience = c.get("salience", 0.5)
-                
-                if not node_id or ":" not in node_id or not new_val:
-                    continue
-                    
-                sec, k = node_id.split(":", 1)
-                
-                # 1. Lower confidence of old node
-                old_node = await asyncio.to_thread(self.store.access_node, user_id, node_id)
-                if old_node:
-                    old_node.confidence = max(0.1, old_node.confidence - 0.3)
-                    await asyncio.to_thread(self.store.upsert_node, user_id, old_node)
-                    
-                # 2. Create provisional node
-                prov_key = f"{k}_prov"
-                prov_id = f"{sec}:{prov_key}"
-                
-                prov_node = MemoryNode(
-                    node_id=prov_id,
-                    section=sec,
-                    key=prov_key,
-                    value=new_val,
-                    salience=salience,
-                    status="provisional"
-                )
-                await asyncio.to_thread(self.store.upsert_node, user_id, prov_node)
-                
-                # 3. Add supersedes edge
-                await asyncio.to_thread(self.store.add_edge, user_id, prov_id, node_id, "supersedes")
-                print(f"[Consolidator] Created provisional contradiction: {prov_id} -[supersedes]-> {node_id}")
-
-            # Stage 4: Upsert Nodes
-            for fact in facts:
-                sec = fact.get("section", "")
-                k = fact.get("key", "")
-                v = fact.get("value", "")
-                s = fact.get("salience", 0.5)
-                
-                if sec and k and v:
-                    nid = f"{sec.lower()}:{k.lower().replace(' ', '_')}"
-                    # Check if this reinforces a provisional node
-                    prov_id = f"{sec.lower()}:{k.lower().replace(' ', '_')}_prov"
-                    existing_nodes = await asyncio.to_thread(self.store.get_all_nodes, user_id)
-                    
-                    if prov_id in existing_nodes:
-                        # Reinforce the supersedes edge to trigger lazy promotion
-                        await asyncio.to_thread(self.store.add_edge, user_id, prov_id, nid, "supersedes")
-                    else:
-                        node = MemoryNode(
-                            node_id=nid,
-                            section=sec,
-                            key=k,
-                            value=v,
-                            salience=s,
-                            status="active"
-                        )
-                        await asyncio.to_thread(self.store.upsert_node, user_id, node)
-
-            # Stage 5: Add Edges
-            for edge in edges:
-                from_key = edge.get("from_key")
-                from_sec = edge.get("from_section")
-                to_key = edge.get("to_key")
-                to_sec = edge.get("to_section")
-                relation = edge.get("relation")
-                
-                if from_key and from_sec and to_key and to_sec and relation:
-                    from_id = f"{from_sec.lower()}:{from_key.lower().replace(' ', '_')}"
-                    to_id = f"{to_sec.lower()}:{to_key.lower().replace(' ', '_')}"
-                    await asyncio.to_thread(self.store.add_edge, user_id, from_id, to_id, relation)
-
-            # Stage 6: Append session note
-            if session_note:
-                await asyncio.to_thread(self.store.append_session, user_id, session_note)
-                
-            await asyncio.to_thread(self.store.increment_conversation_count, user_id)
-            
-            # Stage 7: Lazy evaluate provisional nodes
-            await asyncio.to_thread(self._evaluate_provisional_nodes, user_id)
-
+            await self._run_consolidation(user_id, user_input, ai_response)
         except Exception as e:
-            print(f"[Consolidator] Error: {e}")
+            err = str(e)
+            is_rate_limit = "429" in err or "rate_limit" in err.lower() or "too many" in err.lower()
+            if is_rate_limit and _attempt < CONSOLIDATOR_MAX_RETRIES:
+                delay = CONSOLIDATOR_RETRY_DELAY * (_attempt + 1)
+                print(
+                    f"[Consolidator] 429 on attempt {_attempt + 1}/{CONSOLIDATOR_MAX_RETRIES}. "
+                    f"Retrying in {delay:.0f}s (facts preserved)."
+                )
+                await asyncio.sleep(delay)
+                asyncio.create_task(
+                    self.consolidate(user_id, user_input, ai_response, _attempt + 1)
+                )
+            else:
+                if is_rate_limit:
+                    print(f"[Consolidator] Max retries reached. Memory extraction dropped for this turn.")
+                else:
+                    print(f"[Consolidator] Error: {e}")
+
+    async def _run_consolidation(self, user_id: str, user_input: str, ai_response: str):
+        # Stage 0: Fetch existing nodes summary for comparison
+        existing_summary = await asyncio.to_thread(self.store.get_nodes_summary, user_id)
+
+        # Stage 1: Extract facts
+        patch = await extract_facts(user_input, ai_response, existing_summary)
+
+        ep_data = patch.get("episodic_event")
+        facts = patch.get("facts", [])
+        edges = patch.get("edges", [])
+        contradictions = patch.get("contradictions", [])
+        session_note = patch.get("session_note")
+
+        # Stage 2: Append Episodic
+        if ep_data:
+            ep = EpisodicEvent(
+                event_id=str(uuid.uuid4()),
+                raw_text=ep_data.get("raw_text", ""),
+                emotion=ep_data.get("emotion"),
+                salience=ep_data.get("salience", 0.5),
+                contextual_triggers=ep_data.get("contextual_triggers", [])
+            )
+            await asyncio.to_thread(self.store.append_episode, user_id, ep)
+
+        # Stage 3: Handle Contradictions (Belief Updating)
+        for c in contradictions:
+            node_id = c.get("node_id")
+            new_val = c.get("new_value")
+            salience = c.get("salience", 0.5)
+
+            if not node_id or ":" not in node_id or not new_val:
+                continue
+
+            sec, k = node_id.split(":", 1)
+
+            # 1. Lower confidence of old node
+            old_node = await asyncio.to_thread(self.store.access_node, user_id, node_id)
+            if old_node:
+                old_node.confidence = max(0.1, old_node.confidence - 0.3)
+                await asyncio.to_thread(self.store.upsert_node, user_id, old_node)
+
+            # 2. Create provisional node
+            prov_key = f"{k}_prov"
+            prov_id = f"{sec}:{prov_key}"
+
+            prov_node = MemoryNode(
+                node_id=prov_id,
+                section=sec,
+                key=prov_key,
+                value=new_val,
+                salience=salience,
+                status="provisional"
+            )
+            await asyncio.to_thread(self.store.upsert_node, user_id, prov_node)
+
+            # 3. Add supersedes edge
+            await asyncio.to_thread(self.store.add_edge, user_id, prov_id, node_id, "supersedes")
+            print(f"[Consolidator] Created provisional contradiction: {prov_id} -[supersedes]-> {node_id}")
+
+        # Stage 4: Upsert Nodes
+        for fact in facts:
+            sec = fact.get("section", "")
+            k = fact.get("key", "")
+            v = fact.get("value", "")
+            s = fact.get("salience", 0.5)
+
+            if sec and k and v:
+                nid = f"{sec.lower()}:{k.lower().replace(' ', '_')}"
+                # Check if this reinforces a provisional node
+                prov_id = f"{sec.lower()}:{k.lower().replace(' ', '_')}_prov"
+                existing_nodes = await asyncio.to_thread(self.store.get_all_nodes, user_id)
+
+                if prov_id in existing_nodes:
+                    # Reinforce the supersedes edge to trigger lazy promotion
+                    await asyncio.to_thread(self.store.add_edge, user_id, prov_id, nid, "supersedes")
+                else:
+                    node = MemoryNode(
+                        node_id=nid,
+                        section=sec,
+                        key=k,
+                        value=v,
+                        salience=s,
+                        status="active"
+                    )
+                    await asyncio.to_thread(self.store.upsert_node, user_id, node)
+
+        # Stage 5: Add Edges
+        for edge in edges:
+            from_key = edge.get("from_key")
+            from_sec = edge.get("from_section")
+            to_key = edge.get("to_key")
+            to_sec = edge.get("to_section")
+            relation = edge.get("relation")
+
+            if from_key and from_sec and to_key and to_sec and relation:
+                from_id = f"{from_sec.lower()}:{from_key.lower().replace(' ', '_')}"
+                to_id = f"{to_sec.lower()}:{to_key.lower().replace(' ', '_')}"
+                await asyncio.to_thread(self.store.add_edge, user_id, from_id, to_id, relation)
+
+        # Stage 6: Append session note
+        if session_note:
+            await asyncio.to_thread(self.store.append_session, user_id, session_note)
+
+        await asyncio.to_thread(self.store.increment_conversation_count, user_id)
+
+        # Stage 7: Lazy evaluate provisional nodes
+        await asyncio.to_thread(self._evaluate_provisional_nodes, user_id)
+        # NOTE: Exceptions propagate up to consolidate() which handles retry.
+        # _run_consolidation raises so the retry logic can catch it.
 
     def _evaluate_provisional_nodes(self, user_id: str):
         """

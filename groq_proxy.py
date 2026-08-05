@@ -10,7 +10,9 @@ Features:
   - Automatic retry on 429 with next key + exponential backoff (max 3 attempts)
   - Priority-aware request scheduler: chat (1) > extraction (2) > agent (3)
   - Dual-model routing: 8b for simple tasks, 70b for complex/emotional queries
-  - Whisper STT passthrough with the same key rotation
+  - Whisper STT passthrough with the same key rotation + RPM tracking
+  - TokenBucket pacing: spreads burst traffic across the TPM window proactively
+    so quota is almost never exhausted all at once (prevents wall-of-429s)
 
 Usage:
     from groq_proxy import groq_proxy
@@ -45,11 +47,96 @@ from config import (
     PRIORITY_EXTRACTION,
     PRIORITY_AGENT,
     STT_MODEL,
+    PROXY_SILENT_WAIT_THRESHOLD_S,
+    PROXY_BURST_RESERVE_FRACTION,
 )
 
 
 def _is_8b(model: str) -> bool:
     return "8b" in model or "instant" in model
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Token Bucket — Proactive TPM Pacing
+# ──────────────────────────────────────────────────────────────────────────────
+
+class TokenBucket:
+    """
+    Leaky-bucket / token-refill pacing for Groq TPM limits.
+
+    Goal: spread burst traffic smoothly across the 60-second window so quota
+    is consumed evenly rather than all at once (which causes wall-of-429s).
+
+    Two key design choices:
+      1. PROACTIVE: tracks tokens_available and refills continuously at
+         refill_rate tokens/second. Requests wait only if the bucket is low.
+      2. CONSERVATIVE: a BURST_RESERVE_FRACTION of capacity is held back, so
+         the bucket never fully empties even under heavy load. This means we
+         almost never reach the 429 state.
+
+    When a real server header updates remaining_tokens, the bucket is
+    corrected to the authoritative server value (drift compensation).
+    """
+
+    def __init__(self, capacity: int, refill_rate: float):
+        self.capacity = capacity
+        self.refill_rate = refill_rate          # tokens per second
+        self._tokens: float = float(capacity)
+        self._last_refill: float = time.monotonic()
+        self._lock = asyncio.Lock()
+
+    def _refill(self):
+        """Add tokens based on elapsed time (called before every consume)."""
+        now = time.monotonic()
+        elapsed = now - self._last_refill
+        self._tokens = min(self.capacity, self._tokens + elapsed * self.refill_rate)
+        self._last_refill = now
+
+    async def consume(self, tokens: int) -> float:
+        """
+        Deduct `tokens` from the bucket. If insufficient, waits until
+        refill covers the shortfall.
+        Returns the actual wait time (seconds) — caller uses this to decide
+        whether to tell the user "one moment...".
+        """
+        # Reserve fraction: never dip below this threshold
+        reserve = int(self.capacity * PROXY_BURST_RESERVE_FRACTION)
+        effective_available = max(0, self._tokens - reserve)
+
+        if tokens > effective_available:
+            shortfall = tokens - effective_available
+            wait_s = shortfall / self.refill_rate
+        else:
+            wait_s = 0.0
+
+        if wait_s > 0:
+            await asyncio.sleep(wait_s)
+
+        async with self._lock:
+            self._refill()
+            # After sleeping, tokens should now be available
+            self._tokens = max(0.0, self._tokens - tokens)
+
+        return wait_s
+
+    def server_correct(self, server_remaining: int):
+        """
+        Correct our local estimate using the authoritative server header.
+        Takes the MIN of our estimate and server value (trust lower bound).
+        """
+        async def _correct():
+            async with self._lock:
+                self._refill()
+                # Be conservative: if server says less, trust server
+                if server_remaining < self._tokens:
+                    self._tokens = float(server_remaining)
+        asyncio.create_task(_correct())
+
+    def estimate_tokens(self) -> float:
+        """Current estimated available tokens (after virtual refill)."""
+        now = time.monotonic()
+        elapsed = now - self._last_refill
+        return min(self.capacity, self._tokens + elapsed * self.refill_rate)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -88,15 +175,18 @@ class KeyState:
             return 0
         return self.remaining_tokens_8b if _is_8b(model) else self.remaining_tokens_70b
 
-    def update_from_headers(self, headers: dict):
-        """Parse x-ratelimit-* headers from Groq response."""
+    def update_from_headers(self, headers: dict, model: str):
+        """
+        Parse x-ratelimit-* headers from Groq response.
+        model is required to correctly assign remaining-tokens to the right bucket
+        (fixes the old heuristic bug where a heavy 70b response with few tokens
+        remaining could be misassigned to the 8b bucket).
+        """
         try:
             if "x-ratelimit-remaining-tokens" in headers:
                 val = int(headers["x-ratelimit-remaining-tokens"])
-                # Heuristically assign to correct model bucket
-                # (Groq returns separate headers per model family when using mixed)
-                # Simple approach: update whichever is lower (we just called it)
-                if val < GROQ_TPM_8B:
+                # Use the actual model that was called — no guessing
+                if _is_8b(model):
                     self.remaining_tokens_8b = val
                 else:
                     self.remaining_tokens_70b = val
@@ -116,6 +206,10 @@ class KeyState:
                 )
         except Exception as e:
             print(f"[Proxy] Header parse error: {e}")
+
+    def decrement_rpm(self):
+        """Pessimistically decrement RPM before the request completes."""
+        self.remaining_requests = max(0, self.remaining_requests - 1)
 
     def lock(self, seconds: float):
         self.locked_until = time.monotonic() + seconds
@@ -152,6 +246,18 @@ class GroqProxy:
         self.keys: list[KeyState] = [KeyState(k) for k in api_keys]
         self._rr_index: int = 0
         self._lock = asyncio.Lock()
+        n = len(api_keys)
+
+        # Token buckets span all keys combined (effective quota = per-org × keys)
+        # Refill rate = total_capacity / 60 seconds
+        self._bucket_8b  = TokenBucket(
+            capacity=GROQ_TPM_8B  * n,
+            refill_rate=(GROQ_TPM_8B  * n) / 60.0,
+        )
+        self._bucket_70b = TokenBucket(
+            capacity=GROQ_TPM_70B * n,
+            refill_rate=(GROQ_TPM_70B * n) / 60.0,
+        )
 
     # ── Key Selection ─────────────────────────────────────────────────────────
 
@@ -175,6 +281,22 @@ class GroqProxy:
         """Best-quota first, round-robin fallback."""
         return self._best_key(model) or self._next_key(model)
 
+    # ── Bucket Helpers ────────────────────────────────────────────────────────
+
+    def _bucket_for(self, model: str) -> TokenBucket:
+        return self._bucket_8b if _is_8b(model) else self._bucket_70b
+
+    @staticmethod
+    def _estimate_tokens(messages: list[dict], max_tokens: int) -> int:
+        """
+        Rough token cost estimate for pacing purposes.
+        Prompt tokens ≈ total character count / 4.
+        Add max_tokens for the expected completion.
+        This doesn't need to be exact — the server header corrects the bucket.
+        """
+        prompt_chars = sum(len(m.get("content", "")) for m in messages)
+        return int(prompt_chars / 4) + max_tokens
+
     # ── Core Call ─────────────────────────────────────────────────────────────
 
     async def call(
@@ -185,11 +307,32 @@ class GroqProxy:
         temperature: float = 0.1,
         max_tokens: int = 400,
         response_format: Optional[dict] = None,
+        allow_fallback: bool = True,
     ) -> Optional[str]:
         """
         Non-streaming LLM call. Returns response text or None on failure.
         Retries up to 3 times across different keys on 429.
+
+        Flow:
+          1. Estimate token cost
+          2. Wait on token bucket (pacing — rarely actually waits)
+          3. Select best key + decrement RPM pessimistically
+          4. Send request
+          5. Update bucket + key state from response headers
         """
+        # Step 1: Token bucket pacing
+        estimated = self._estimate_tokens(messages, max_tokens)
+        bucket = self._bucket_for(model)
+        wait_s = await bucket.consume(estimated)
+
+        if wait_s >= PROXY_SILENT_WAIT_THRESHOLD_S:
+            print(
+                f"[Proxy] Pacing wait {wait_s:.1f}s for {model} "
+                f"(bucket at {bucket.estimate_tokens():.0f} tokens). "
+                f"This should be rare — check if call volume is too high."
+            )
+
+        # Step 2: Retry loop across keys
         attempts = 0
         last_err = None
 
@@ -206,6 +349,9 @@ class GroqProxy:
                     k.remaining_requests = GROQ_RPM
                 key_state = self.keys[0]
 
+            # Pessimistic RPM decrement before the request
+            key_state.decrement_rpm()
+
             kwargs = dict(
                 model=model,
                 messages=messages,
@@ -218,11 +364,16 @@ class GroqProxy:
             try:
                 response = await key_state.client.chat.completions.create(**kwargs)
 
-                # Update rate tracking from response headers
-                raw_response = response  # groq SDK exposes headers via _raw_response
+                # Update rate tracking from response headers (model-aware fix)
                 try:
                     headers = response._raw_response.headers  # type: ignore
-                    key_state.update_from_headers(dict(headers))
+                    headers_dict = dict(headers)
+                    key_state.update_from_headers(headers_dict, model)
+                    # Correct token bucket with authoritative server value
+                    if "x-ratelimit-remaining-tokens" in headers_dict:
+                        server_remaining = int(headers_dict["x-ratelimit-remaining-tokens"])
+                        # Scale from per-key to combined bucket estimate
+                        bucket.server_correct(server_remaining * len(self.keys))
                 except Exception:
                     pass
 
@@ -235,14 +386,35 @@ class GroqProxy:
                 attempts += 1
 
                 if "429" in err or "rate_limit" in err.lower() or "too many requests" in err.lower():
-                    # Try to extract retry-after header
+                    # Try to extract retry-after header or Groq's specific try again string
                     retry_after = 30.0
                     try:
                         m = re.search(r"retry after (\d+)", err, re.IGNORECASE)
                         if m:
                             retry_after = float(m.group(1))
+                        else:
+                            m2 = re.search(r"try again in (?:(\d+)h)?(?:(\d+)m)?(?:([\d.]+)s)?", err, re.IGNORECASE)
+                            if m2:
+                                h = float(m2.group(1) or 0)
+                                m_ = float(m2.group(2) or 0)
+                                s = float(m2.group(3) or 0)
+                                if h > 0 or m_ > 0 or s > 0:
+                                    retry_after = h * 3600 + m_ * 60 + s
                     except Exception:
                         pass
+
+                    if retry_after > 60 and "70b" in model:
+                        if allow_fallback:
+                            print(f"[Proxy] High wait ({retry_after}s) for {model}. Smart fallback to 8b.")
+                            model = CHAT_MODEL
+                            # Switch bucket for the new model
+                            bucket = self._bucket_for(model)
+                            continue  # don't lock key, just switch model and retry
+                        else:
+                            # Critical call — do NOT downgrade, signal rate limit to caller
+                            print(f"[Proxy] High wait ({retry_after}s) for {model}. No fallback (critical call).")
+                            return f"RATE_LIMIT: {err}"
+
                     key_state.lock(retry_after)
                     print(f"[Proxy] 429 on key ...{key_state.key[-6:]}. Trying next key.")
                     continue
@@ -251,6 +423,8 @@ class GroqProxy:
                 break
 
         print(f"[Proxy] All attempts failed: {last_err}")
+        if last_err and ("429" in last_err or "rate_limit" in last_err.lower() or "too many requests" in last_err.lower()):
+            return f"RATE_LIMIT: {last_err}"
         return None
 
     # ── Streaming Chat ────────────────────────────────────────────────────────
@@ -272,6 +446,13 @@ class GroqProxy:
         _SENTENCE_END = re.compile(r'(?<=[.!?])\s+|(?<=[.!?])$')
         _CLAUSE_END   = re.compile(r'(?<=[,;])\s+')
 
+        # Token bucket pacing for streaming
+        estimated = self._estimate_tokens(messages, max_tokens)
+        bucket = self._bucket_for(model)
+        wait_s = await bucket.consume(estimated)
+        if wait_s >= PROXY_SILENT_WAIT_THRESHOLD_S:
+            print(f"[Proxy] Stream pacing wait {wait_s:.1f}s for {model}")
+
         attempts = 0
         while attempts < min(3, len(self.keys) + 1):
             key_state = self._select_key(model)
@@ -281,6 +462,8 @@ class GroqProxy:
                 yield "Give me just a second."
                 await asyncio.sleep(60)
                 key_state = self.keys[0]
+
+            key_state.decrement_rpm()
 
             try:
                 stream = await key_state.client.chat.completions.create(
@@ -330,10 +513,14 @@ class GroqProxy:
                         if clause:
                             yield clause
 
-                # Update rate headers
+                # Update rate headers (model-aware)
                 try:
                     headers = stream._raw_response.headers  # type: ignore
-                    key_state.update_from_headers(dict(headers))
+                    headers_dict = dict(headers)
+                    key_state.update_from_headers(headers_dict, model)
+                    if "x-ratelimit-remaining-tokens" in headers_dict:
+                        server_remaining = int(headers_dict["x-ratelimit-remaining-tokens"])
+                        bucket.server_correct(server_remaining * len(self.keys))
                 except Exception:
                     pass
 
@@ -388,14 +575,23 @@ class GroqProxy:
         response_format: str = "text",
     ) -> Optional[str]:
         """
-        Transcribe audio with round-robin key selection.
-        Whisper uses audio-seconds quota, not TPM — treated separately.
+        Transcribe audio with key selection via _select_key() + RPM tracking.
+        STT calls now decrement the RPM counter like LLM calls, since Groq's
+        30 RPM limit is shared between LLM and STT on the same key.
         """
         attempts = 0
+        # Use a pseudo-model string for RPM key selection
+        # STT doesn't use TPM, so we just need RPM-aware key selection
         while attempts < len(self.keys):
-            # Round-robin for STT (no TPM tracking needed)
-            self._rr_index = (self._rr_index + 1) % len(self.keys)
-            key_state = self.keys[self._rr_index]
+            # Select key with available RPM (not token-based for STT)
+            key_state = self._select_key(model)
+            if not key_state:
+                # All keys RPM-locked — use round-robin as fallback
+                self._rr_index = (self._rr_index + 1) % len(self.keys)
+                key_state = self.keys[self._rr_index]
+
+            # Decrement RPM before call (STT uses the same 30 RPM per key)
+            key_state.decrement_rpm()
 
             try:
                 result = await key_state.client.audio.transcriptions.create(
@@ -409,6 +605,10 @@ class GroqProxy:
                 attempts += 1
                 if "429" in err or "rate_limit" in err.lower():
                     key_state.lock(30.0)
+                    # Also give back the RPM we decremented since call failed
+                    key_state.remaining_requests = min(
+                        GROQ_RPM, key_state.remaining_requests + 1
+                    )
                     continue
                 print(f"[Proxy] STT error: {e}")
                 return None

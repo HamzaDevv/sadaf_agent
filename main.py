@@ -3,13 +3,13 @@ main.py — Sadaf V6 (Antigravity 2.0 Agent-First Architecture)
 
 V6 changes:
   - Boss Orchestrator coordinates specialized subagents
-  - Tool Subagent handles complex tool chains and clipboard auto-save
+  - Tool Subagent is now autonomous with clarification feedback loop
   - Speaker Subagent unifies personality and TTS
   - Memory Subagent strictly isolates user facts from AI context
+  - vision_query intent fast-paths camera through orchestrator
 """
 import asyncio
 import time
-from collections import deque
 
 from audio.listen import listen_once, transcribe_with_noise_reduction
 from audio.speak import speak_async_system
@@ -33,7 +33,6 @@ from config import (
     DEFAULT_USER_ID,
     RECORDING_TIME_IN_SECONDS,
     OUTPUT_FILE,
-    PRIVACY_MODE,
 )
 
 
@@ -57,15 +56,16 @@ async def run():
     graph_store  = MemoryGraphStore(MEMORY_DIR)
     agent        = MemoryAgent(graph_store)
     consolidator = MemoryConsolidator(graph_store)
-    
-    tool_subagent = ToolSubagent()
+
+    # speak_fn is wired into tool_subagent so reminder/timer TTS callbacks work
+    tool_subagent    = ToolSubagent(speak_fn=speak_async_system)
     speaker_subagent = SpeakerSubagent()
-    
+
     orchestrator = BossOrchestrator(
         memory_agent=agent,
         tool_subagent=tool_subagent,
         speaker_subagent=speaker_subagent,
-        consolidator=consolidator
+        consolidator=consolidator,
     )
 
     graph_store.ensure_user_dir(DEFAULT_USER_ID)
@@ -79,11 +79,8 @@ async def run():
     await speak_async_system(f"Hey, I'm {AI_NAME}. I'm listening.")
 
     session_start = time.time()
-    running = True
-
-    _paused_mode = False
-    _awaiting_camera_permission = False
-    _pending_camera_query = ""
+    running       = True
+    _paused_mode  = False
 
     try:
         while running and (time.time() - session_start < RECORDING_TIME_IN_SECONDS):
@@ -101,13 +98,30 @@ async def run():
             if not user_text:
                 continue
 
-            # 2. Cognitive Pre-Processing
-            analysis = await analyze_input(user_text)
-            clean_text = analysis["clean_text"]
-            intent = analysis["intent"]
-            emotion = analysis["emotion"]
+            # 3. Paused-mode gate — MUST run BEFORE analyze_input.
+            # Reason: the LLM pre-processor strips address words like "Ok Sadaf,"
+            # from utterances (e.g. "Ok Sadaf, I am back" → "I am back"), which
+            # removes the AI name so the wake regex never fires.
+            # Fix: while paused, skip the LLM entirely and check the raw STT text.
+            if _paused_mode:
+                print(f"[paused, filtered]: {user_text}")
+                if await should_resume(user_text):
+                    _paused_mode = False
+                    print("AI: I'm back!")
+                    await speak_async_system("I'm back!")
+                    await save_transcript("Sadaf: I'm back!")
+                # Whether resumed or not, don't process this turn further.
+                # Next loop iteration picks up fresh input.
+                continue
 
-            # 3. Fast-Path Overrides (Exit/Pause)
+            # 2. Cognitive Pre-Processing (only runs when NOT paused)
+            analysis   = await analyze_input(user_text)
+            clean_text = analysis["clean_text"]
+            intent     = analysis["intent"]
+            emotion    = analysis["emotion"]
+
+
+            # 4. Fast-Path Overrides (Exit / Pause) — only when NOT paused
             if intent == "exit":
                 await speak_async_system("Alright, take care. Allah hafiz.")
                 await save_transcript(f"User: {clean_text}")
@@ -116,53 +130,24 @@ async def run():
 
             if intent == "pause":
                 _paused_mode = True
-                await speak_async_system("Alright, I'll be right here. Just say 'Sadaf' when you're ready.")
+                await speak_async_system(
+                    f"Alright, I'll be right here. Just say '{AI_NAME}' when you're ready."
+                )
                 await save_transcript(f"User: {clean_text}")
                 continue
-                
-            if _paused_mode:
-                if await should_resume(clean_text):
-                    _paused_mode = False
-                    await speak_async_system("I'm back!")
-                    await save_transcript("Sadaf: I'm back!")
-                else:
-                    continue
 
             await save_transcript(f"User: {clean_text}")
-            
-            # PRIVACY_MODE camera gate (legacy check, can also be handled by subagent if upgraded later)
-            if _awaiting_camera_permission:
-                _awaiting_camera_permission = False
-                answer = clean_text.lower()
-                if any(w in answer for w in ["yes", "sure", "okay", "ok", "go ahead", "please"]):
-                    from brain.vision import analyze_scene
-                    vision_answer = await analyze_scene(_pending_camera_query)
-                    print(f"Sadaf: {vision_answer}")
-                    await speak_async_system(vision_answer)
-                    await save_transcript(f"Sadaf: {vision_answer}")
-                    asyncio.create_task(
-                        consolidator.consolidate(DEFAULT_USER_ID, _pending_camera_query, vision_answer)
-                    )
-                else:
-                    await speak_async_system("Alright, no worries.")
-                _pending_camera_query = ""
-                continue
-                
-            # Intercept camera requests if privacy mode is on
-            if PRIVACY_MODE and any(w in clean_text.lower() for w in ["look at", "what am i holding", "take a picture"]):
-                await speak_async_system("May I use the camera to take a look?")
-                _awaiting_camera_permission = True
-                _pending_camera_query = clean_text
-                continue
 
             # 4. Boss Orchestrator Processing
+            # vision_query intent is handled as a fast-path inside the orchestrator.
+            # All other intents (tool, speak, clarify) are also routed inside.
             final_spoken = await orchestrator.process(
                 user_id=DEFAULT_USER_ID,
                 user_text=clean_text,
                 emotion=emotion,
-                intent=intent
+                intent=intent,
             )
-            
+
             print(f"Sadaf: {final_spoken}")
             await speak_async_system(final_spoken)
             await save_transcript(f"Sadaf: {final_spoken}")

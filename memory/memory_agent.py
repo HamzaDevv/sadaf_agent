@@ -152,30 +152,35 @@ class MemoryAgent:
         subgraph = self.store.get_subgraph(user_id, top_k)
 
         # Step 4: LLM Final Pruning
-        subgraph_str = json.dumps(subgraph, indent=2)
-        prompt = TRAVERSAL_PROMPT.format(query=query, subgraph=subgraph_str)
-        
-        final_nodes = top_k
-        try:
-            raw = await groq_proxy.call(
-                model=SUBAGENT_MODEL,
-                messages=[{"role": "user", "content": prompt}],
-                priority=PRIORITY_AGENT,
-                temperature=0.0,
-                max_tokens=150,
-            )
-            if raw:
-                try:
-                    start = raw.index("[")
-                    end = raw.rindex("]") + 1
-                    match = raw[start:end]
-                    llm_picked = json.loads(match)
-                    if isinstance(llm_picked, list):
-                        final_nodes = [n for n in llm_picked if n in all_nodes]
-                except ValueError:
-                    pass
-        except Exception as e:
-            print(f"[MemoryAgent] LLM pruning failed: {e}")
+        # Skip if subgraph is already tiny (≤ 3 nodes) — not worth the LLM call.
+        if len(top_k) <= 3:
+            print(f"[MemoryAgent] Skipping LLM pruning (only {len(top_k)} nodes activated)")
+            final_nodes = top_k
+        else:
+            subgraph_str = json.dumps(subgraph, indent=2)
+            prompt = TRAVERSAL_PROMPT.format(query=query, subgraph=subgraph_str)
+
+            final_nodes = top_k
+            try:
+                raw = await groq_proxy.call(
+                    model=SUBAGENT_MODEL,
+                    messages=[{"role": "user", "content": prompt}],
+                    priority=PRIORITY_AGENT,
+                    temperature=0.0,
+                    max_tokens=150,
+                )
+                if raw:
+                    try:
+                        start = raw.index("[")
+                        end = raw.rindex("]") + 1
+                        match = raw[start:end]
+                        llm_picked = json.loads(match)
+                        if isinstance(llm_picked, list):
+                            final_nodes = [n for n in llm_picked if n in all_nodes]
+                    except ValueError:
+                        pass
+            except Exception as e:
+                print(f"[MemoryAgent] LLM pruning failed: {e}")
 
         # Assemble final context
         if not final_nodes:

@@ -110,4 +110,4 @@ def calculate(query: str) -> str:
     except ZeroDivisionError:
         return "You can't divide by zero, that's undefined."
     except Exception as e:
-        return f"I couldn't calculate that. Try rephrasing it as a math expression."
+        return f"I couldn't calculate that. I only handle basic math expressions."
