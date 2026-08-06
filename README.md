@@ -30,7 +30,7 @@ Sadaf_2/
 ├── tools/            # Modular tools (Web search, camera, system info, etc.)
 ├── utils/            # General helper utilities
 ├── config.py         # Central configuration & rate limit tuning
-├── groq_proxy.py     # Multi-key proxy load balancer & queue manager
+├── llm_proxy.py     # Multi-key proxy load balancer & queue manager
 ├── main.py           # Core conversational agent entry point
 ├── personality.py    # System prompt & persona definition
 └── requirements.txt  # Project dependencies

@@ -12,7 +12,7 @@ from typing import Optional, Union, Any
 from memory.graph_store import MemoryGraphStore
 from memory.schemas import MemoryNode
 from config import SUBAGENT_MODEL, PRIORITY_AGENT
-from groq_proxy import groq_proxy
+from llm_proxy import llm_proxy
 
 TRAVERSAL_PROMPT = """\
 You are a cognitive memory graph traversal agent.
@@ -162,7 +162,7 @@ class MemoryAgent:
 
             final_nodes = top_k
             try:
-                raw = await groq_proxy.call(
+                raw = await llm_proxy.call(
                     model=SUBAGENT_MODEL,
                     messages=[{"role": "user", "content": prompt}],
                     priority=PRIORITY_AGENT,

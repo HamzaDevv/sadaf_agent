@@ -2,7 +2,7 @@
 listen.py — Sadaf Audio Input + Groq Whisper STT
 
 Features:
-  - Uses groq_proxy.transcribe() for STT (key rotation, retry on 429)
+  - Uses llm_proxy.transcribe() for STT (key rotation, retry on 429)
   - VAD + noise reduction pipeline
 """
 import asyncio
@@ -14,7 +14,7 @@ import speech_recognition as sr
 from pydub import AudioSegment
 import noisereduce as nr
 
-from groq_proxy import groq_proxy
+from llm_proxy import llm_proxy
 from config import (
     PAUSE_THRESHOLD,
     ENERGY_THRESHOLD,
@@ -115,8 +115,8 @@ async def transcribe_with_noise_reduction(audio: sr.AudioData) -> Optional[str]:
         clean_segment.export(bio, format="wav")
         audio_file_bytes = bio.getvalue()
 
-        # Use groq_proxy for STT (round-robin key rotation)
-        text = await groq_proxy.transcribe(
+        # Use llm_proxy for STT (round-robin key rotation)
+        text = await llm_proxy.transcribe(
             file_tuple=("audio.wav", audio_file_bytes),
             model=STT_MODEL,
             response_format="text",

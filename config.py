@@ -17,12 +17,19 @@ load_dotenv()
 _raw_keys = os.getenv("GROQ_API_KEYS", os.getenv("GROQ_API_KEY", ""))
 GROQ_API_KEYS: list[str] = [k.strip() for k in _raw_keys.split(",") if k.strip()]
 
+_raw_gemini_keys = os.getenv("GEMINI_API_KEYS", os.getenv("GEMINI_API_KEY", ""))
+GEMINI_API_KEYS: list[str] = [k.strip() for k in _raw_gemini_keys.split(",") if k.strip()]
+
 # Legacy single-key fallback (for any module that still imports it directly)
 GROQ_API_KEY: str = GROQ_API_KEYS[0] if GROQ_API_KEYS else ""
 
 GOOGLE_API_KEY  = os.getenv("GOOGLE_API_KEY", "")
 TAVILY_API_KEY  = os.getenv("TAVILY_API_KEY", "")
 GNEWS_API_KEY   = os.getenv("GNEWS_API_KEY", "")
+
+# ── AI Provider Configuration ─────────────────────────────────────────────────
+AI_PROVIDER = os.getenv("AI_PROVIDER", "groq").lower()
+
 
 # ── Privacy / Behaviour Flags ─────────────────────────────────────────────────
 # When True: camera tool asks "may I use the camera?" before capturing
@@ -34,10 +41,17 @@ REMINDERS_FILE = os.path.join(os.path.dirname(__file__), "memories", "reminders.
 AI_NAME = "Sadaf"
 
 # ── Model Selection ───────────────────────────────────────────────────────────
-BOSS_MODEL     = "llama-3.3-70b-versatile"  # Boss Orchestrator only (routing + synthesis)
-SUBAGENT_MODEL = "llama-3.1-8b-instant"     # All subagents: pre-processor, memory, tool, speaker
-CHAT_MODEL     = "llama-3.1-8b-instant"     # Fallback chat model
-VISION_MODEL   = "meta-llama/llama-4-scout-17b-16e-instruct"  # Camera / Vision (multimodal)
+if AI_PROVIDER == "gemini":
+    BOSS_MODEL     = "gemini-2.0-flash"       # Real current-gen flash model
+    SUBAGENT_MODEL = "gemini-2.0-flash-lite"  # Cheapest/fastest; 30 RPM free
+    CHAT_MODEL     = "gemini-2.0-flash-lite"
+    VISION_MODEL   = "gemini-2.0-flash"
+else:
+    BOSS_MODEL     = "llama-3.3-70b-versatile"  # Boss Orchestrator only (routing + synthesis)
+    SUBAGENT_MODEL = "llama-3.1-8b-instant"     # All subagents: pre-processor, memory, tool, speaker
+    CHAT_MODEL     = "llama-3.1-8b-instant"     # Fallback chat model
+    VISION_MODEL   = "meta-llama/llama-4-scout-17b-16e-instruct"  # Camera / Vision (multimodal)
+
 STT_MODEL      = "whisper-large-v3-turbo"   # Fast Groq speech-to-text
 
 # ── Why this split? ─────────────────────────────────────────────────────────
@@ -47,11 +61,19 @@ STT_MODEL      = "whisper-large-v3-turbo"   # Fast Groq speech-to-text
 # This reduces 70b usage from ~5-6 calls/turn to 1, giving ~5× more headroom
 # on the free tier (6,000 TPM for 70b per org × 3 orgs = 18,000 TPM effective).
 
-# ── Rate Limits (Groq free tier, per org) ────────────────────────────────────
-# With 3 separate-org keys: effective TPM = 3× the per-org limit
+# ── Rate Limits ──────────────────────────────────────────────────────────────
+# Groq free tier, per org
 GROQ_TPM_8B  = 14_400  # llama-3.1-8b-instant: ~14,400 TPM free per org
 GROQ_TPM_70B = 6_000   # llama-3.3-70b-versatile: ~6,000 TPM free per org
 GROQ_RPM     = 30      # requests per minute per org (both models)
+
+# Gemini free tier, per key (gemini-2.0-flash-lite / gemini-2.0-flash)
+GEMINI_TPM_LITE  = 1_000_000   # gemini-2.0-flash-lite: 1M TPM
+GEMINI_TPM_FLASH = 250_000     # gemini-2.0-flash: 250K TPM
+GEMINI_RPM_LITE  = 30          # gemini-2.0-flash-lite: 30 RPM
+GEMINI_RPM_FLASH = 10          # gemini-2.0-flash: 10 RPM
+# How long to lock a key after receiving a 429 (one full quota window + buffer)
+GEMINI_RETRY_LOCK_S = 62.0
 
 # Request priority levels (lower = higher priority)
 PRIORITY_CHAT       = 1

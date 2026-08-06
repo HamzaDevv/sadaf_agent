@@ -14,7 +14,7 @@ import pyperclip
 from typing import Dict, Any, Optional, Callable
 
 from config import SUBAGENT_MODEL, PRIORITY_AGENT
-from groq_proxy import groq_proxy
+from llm_proxy import llm_proxy
 from tools.registry import TOOL_REGISTRY
 from tools.web_search import read_web_link
 
@@ -128,7 +128,7 @@ class ToolSubagent:
         )
 
         try:
-            raw = await groq_proxy.call(
+            raw = await llm_proxy.call(
                 model=SUBAGENT_MODEL,
                 messages=[{"role": "user", "content": prompt}],
                 response_format={"type": "json_object"},

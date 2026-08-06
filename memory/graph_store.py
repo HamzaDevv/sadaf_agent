@@ -18,7 +18,8 @@ from config import MEMORY_DIR
 import chromadb
 from chromadb.config import Settings
 from chromadb.api.types import Documents, EmbeddingFunction, Embeddings
-import google.generativeai as genai
+import google.genai as genai
+from google.genai import types as genai_types
 from dotenv import load_dotenv
 
 # Load env vars for Gemini API Key
@@ -31,18 +32,34 @@ class GeminiEmbeddingFunction(EmbeddingFunction):
         api_key = os.environ.get("GOOGLE_API_KEY")
         if not api_key:
             print("[GraphStore] WARNING: GOOGLE_API_KEY not found. Embeddings will fail.")
-        genai.configure(api_key=api_key)
+        self._client = genai.Client(api_key=api_key)
         self.model = 'models/gemini-embedding-2'
-        
+
+    @staticmethod
+    def name() -> str:
+        """Required by ChromaDB EmbeddingFunction interface."""
+        return "gemini-embedding"
+
+    def get_config(self) -> dict:
+        """Required by ChromaDB EmbeddingFunction interface."""
+        return {"model": self.model}
+
+    @classmethod
+    def build_from_config(cls, config: dict) -> "GeminiEmbeddingFunction":
+        """Required by ChromaDB EmbeddingFunction interface for round-trip serialization."""
+        instance = cls()
+        instance.model = config.get("model", instance.model)
+        return instance
+
     def __call__(self, input: Documents) -> Embeddings:
         embeddings = []
         for text in input:
-            result = genai.embed_content(
+            result = self._client.models.embed_content(
                 model=self.model,
-                content=text,
-                task_type="retrieval_document"
+                contents=text,
+                config=genai_types.EmbedContentConfig(task_type="retrieval_document")
             )
-            embeddings.append(result['embedding'])
+            embeddings.append(result.embeddings[0].values)
         return embeddings
 
 class MemoryGraphStore:

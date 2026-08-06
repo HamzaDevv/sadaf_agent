@@ -25,6 +25,9 @@ class MemoryConsolidator:
         """
         try:
             await self._run_consolidation(user_id, user_input, ai_response)
+        except asyncio.CancelledError:
+            # Graceful cancellation (e.g. during test teardown or app shutdown)
+            return
         except Exception as e:
             err = str(e)
             is_rate_limit = "429" in err or "rate_limit" in err.lower() or "too many" in err.lower()

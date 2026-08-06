@@ -2,7 +2,7 @@
 tools/camera_tool.py — Sadaf V4 Camera Tool
 
 V4 changes:
-  - Uses groq_proxy for all API calls (key rotation, rate management)
+  - Uses llm_proxy for all API calls (key rotation, rate management)
   - Removed direct AsyncGroq client and GROQ_API_KEY dependency
 """
 import cv2
@@ -12,7 +12,7 @@ import base64
 from pathlib import Path
 import time
 
-from groq_proxy import groq_proxy
+from llm_proxy import llm_proxy
 from config import VISION_MODEL
 
 
@@ -52,7 +52,7 @@ async def analyze_image_with_groq(image_path: str, query: str) -> str:
     """Send the captured image and query to Groq Vision LLM via proxy."""
     image_base64 = encode_image_to_base64(image_path)
 
-    result = await groq_proxy.call(
+    result = await llm_proxy.call(
         model=VISION_MODEL,
         messages=[
             {

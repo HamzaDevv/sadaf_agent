@@ -15,7 +15,7 @@ dumped verbatim. Reads like a friend catching you up on the news.
 import asyncio
 import re
 import requests
-from groq_proxy import groq_proxy
+from llm_proxy import llm_proxy
 from config import GNEWS_API_KEY, SUBAGENT_MODEL, PRIORITY_AGENT
 
 GNEWS_BASE = "https://gnews.io/api/v4"
@@ -191,7 +191,7 @@ async def get_news(query: str = "", memory_context: str = "", user_name: str = "
         news_data=news_data,
     )
     try:
-        narrated = await groq_proxy.call(
+        narrated = await llm_proxy.call(
             model=SUBAGENT_MODEL,
             messages=[{"role": "user", "content": prompt}],
             priority=PRIORITY_AGENT,

@@ -12,7 +12,7 @@ from pathlib import Path
 import pyautogui
 from PIL import Image
 
-from groq_proxy import groq_proxy
+from llm_proxy import llm_proxy
 from config import VISION_MODEL, CHAT_MODEL
 from utils import strip_think_tags
 
@@ -39,7 +39,7 @@ def _encode_image(path: str) -> str:
 async def _analyze_screenshot(image_path: str, query: str) -> str:
     """Send screenshot to Groq Vision and get a spoken analysis."""
     b64 = await asyncio.to_thread(_encode_image, image_path)
-    raw = await groq_proxy.call(
+    raw = await llm_proxy.call(
         model=VISION_MODEL,
         messages=[
             {
@@ -56,7 +56,7 @@ async def _analyze_screenshot(image_path: str, query: str) -> str:
     raw = strip_think_tags(raw or "")
 
     # Compress to spoken sentence
-    result = await groq_proxy.call(
+    result = await llm_proxy.call(
         model=CHAT_MODEL,
         messages=[
             {"role": "system", "content": "Summarize this screen analysis in 1-2 spoken sentences. No markdown."},

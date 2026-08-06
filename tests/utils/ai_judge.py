@@ -1,6 +1,6 @@
 import json
 from config import BOSS_MODEL, PRIORITY_AGENT
-from groq_proxy import groq_proxy
+from llm_proxy import llm_proxy
 
 async def score_conversation(turns: list[dict], persona: str) -> dict:
     """
@@ -32,7 +32,7 @@ Output exactly this JSON:
 }}
 """
     try:
-        raw = await groq_proxy.call(
+        raw = await llm_proxy.call(
             model=BOSS_MODEL,
             messages=[{"role": "user", "content": prompt}],
             response_format={"type": "json_object"},
@@ -61,7 +61,7 @@ Output exactly this JSON:
 }}
 """
     try:
-        raw = await groq_proxy.call(
+        raw = await llm_proxy.call(
             model=BOSS_MODEL,
             messages=[{"role": "user", "content": prompt}],
             response_format={"type": "json_object"},

@@ -15,8 +15,6 @@ async def speak_async_system(text: str):
     if len(words) > MAX_RESPONSE_WORDS:
         shortened_text += "..."
 
-    print(f"AI: {shortened_text}")
-
     try:
         # Run TTS without blocking main event loop and without shell injection risk
         await asyncio.to_thread(

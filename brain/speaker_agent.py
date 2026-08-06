@@ -4,7 +4,7 @@ Converts Boss/Tool text into punchy, personality-infused spoken output.
 Strips markdown, handles TTS rules, injects emotion.
 """
 from config import SUBAGENT_MODEL, PRIORITY_AGENT, AI_NAME
-from groq_proxy import groq_proxy
+from llm_proxy import llm_proxy
 from utils import strip_think_tags, strip_markdown
 
 class SpeakerSubagent:
@@ -37,7 +37,7 @@ CONTENT TO SPEAK:
 Speak directly to the user:"""
 
         try:
-            raw = await groq_proxy.call(
+            raw = await llm_proxy.call(
                 model=SUBAGENT_MODEL,
                 messages=[
                     {"role": "system", "content": self.system_prompt},

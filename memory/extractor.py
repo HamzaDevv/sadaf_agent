@@ -5,7 +5,7 @@ Extracts episodic events and semantic facts/edges.
 Detects conflicts/contradictions for belief updating.
 """
 import json
-from groq_proxy import groq_proxy
+from llm_proxy import llm_proxy
 from config import SUBAGENT_MODEL, PRIORITY_EXTRACTION
 
 EXTRACTION_PROMPT = """\
@@ -65,12 +65,12 @@ Rules:
 
 async def extract_facts(user_input: str, ai_response: str, existing_facts_summary: str = "") -> dict:
     """
-    Extract structured episodic and semantic facts from a conversation turn via groq_proxy.
+    Extract structured episodic and semantic facts from a conversation turn via llm_proxy.
     Returns a patch dict or empty dict on failure.
     """
     interaction = f"EXISTING MEMORY FACTS:\n{existing_facts_summary or 'None'}\n\nUSER STATEMENT (EXTRACT USER FACTS ONLY FROM THIS):\nUser: {user_input}\n\nAI RESPONSE (CONTEXT ONLY - DO NOT EXTRACT ANY USER FACTS FROM THIS):\nSadaf: {ai_response}"
     try:
-        raw = await groq_proxy.call(
+        raw = await llm_proxy.call(
             model=SUBAGENT_MODEL,
             messages=[
                 {"role": "system", "content": EXTRACTION_PROMPT},

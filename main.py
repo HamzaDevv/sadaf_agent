@@ -76,6 +76,7 @@ async def run():
     asyncio.create_task(fire_pending_reminders(speak_async_system))
 
     # ── Greeting ─────────────────────────────────────────────────────────────
+    print(f"Sadaf: Hey, I'm {AI_NAME}. I'm listening.")
     await speak_async_system(f"Hey, I'm {AI_NAME}. I'm listening.")
 
     session_start = time.time()
@@ -107,7 +108,7 @@ async def run():
                 print(f"[paused, filtered]: {user_text}")
                 if await should_resume(user_text):
                     _paused_mode = False
-                    print("AI: I'm back!")
+                    print("Sadaf: I'm back!")
                     await speak_async_system("I'm back!")
                     await save_transcript("Sadaf: I'm back!")
                 # Whether resumed or not, don't process this turn further.
@@ -123,6 +124,7 @@ async def run():
 
             # 4. Fast-Path Overrides (Exit / Pause) — only when NOT paused
             if intent == "exit":
+                print("Sadaf: Alright, take care. Allah hafiz.")
                 await speak_async_system("Alright, take care. Allah hafiz.")
                 await save_transcript(f"User: {clean_text}")
                 running = False
@@ -130,9 +132,9 @@ async def run():
 
             if intent == "pause":
                 _paused_mode = True
-                await speak_async_system(
-                    f"Alright, I'll be right here. Just say '{AI_NAME}' when you're ready."
-                )
+                msg = f"Alright, I'll be right here. Just say '{AI_NAME}' when you're ready."
+                print(f"Sadaf: {msg}")
+                await speak_async_system(msg)
                 await save_transcript(f"User: {clean_text}")
                 continue
 

@@ -1,7 +1,7 @@
 import asyncio
 import time
 from config import BOSS_MODEL, PRIORITY_AGENT
-from groq_proxy import groq_proxy
+from llm_proxy import llm_proxy
 from tests.utils.fixtures import get_isolated_orchestrator, cleanup_isolated_data
 from tests.utils.ai_judge import score_conversation
 
@@ -24,7 +24,7 @@ If the AI says goodbye or the conversation reaches a natural end, reply with "go
 Reply ONLY with the exact text Alex says, no quotes, no extra formatting.
 """
     try:
-        raw = await groq_proxy.call(
+        raw = await llm_proxy.call(
             model=BOSS_MODEL,
             messages=[{"role": "user", "content": prompt}],
             priority=PRIORITY_AGENT,

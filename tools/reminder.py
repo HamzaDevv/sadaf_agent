@@ -223,6 +223,7 @@ async def fire_pending_reminders(speak_fn: Callable):
     if missed:
         summary = f"Hey, you have {len(missed)} missed reminder{'s' if len(missed) > 1 else ''}. "
         summary += "Here they are: " + ". Also, ".join(missed) + "."
+        print(f"Sadaf: {summary}")
         await speak_fn(summary)
 
     for r in _load_reminders():
@@ -240,7 +241,9 @@ async def _schedule_reminder(fire_at: datetime, message: str):
     if delay > 0:
         await asyncio.sleep(delay)
     if _speak_fn:
-        await _speak_fn(f"Hey, just a reminder — {message}.")
+        msg = f"Hey, just a reminder — {message}."
+        print(f"Sadaf: {msg}")
+        await _speak_fn(msg)
     _mark_fired(fire_at.isoformat(), message)
 
 

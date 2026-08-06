@@ -21,7 +21,7 @@ Why three levels?
 
 import re
 import json
-from groq_proxy import groq_proxy
+from llm_proxy import llm_proxy
 from config import SUBAGENT_MODEL, PRIORITY_AGENT, PRE_PROCESSOR_TWO_LEVEL
 
 # ── Level 1: Regex Intent Patterns ────────────────────────────────────────────
@@ -118,7 +118,7 @@ async def analyze_input(raw_text: str) -> dict:
 
     # Level 2 — LLM confirmation + STT cleanup
     try:
-        raw_response = await groq_proxy.call(
+        raw_response = await llm_proxy.call(
             model=SUBAGENT_MODEL,
             messages=[
                 {

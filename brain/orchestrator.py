@@ -11,13 +11,14 @@ Architecture:
 - All results always flow back through orchestrator → speaker
 - Buffer size driven by config.BUFFER_SIZE
 """
+import asyncio
 import json
 import re
 import pyperclip
 from typing import Optional
 
 from config import BOSS_MODEL, PRIORITY_AGENT, AI_NAME, BUFFER_SIZE, BOSS_MEMORY_MAX_CHARS, BOSS_HISTORY_MAX_TURNS
-from groq_proxy import groq_proxy
+from llm_proxy import llm_proxy
 
 from memory.memory_agent import MemoryAgent
 from memory.consolidator import MemoryConsolidator
@@ -116,7 +117,26 @@ class BossOrchestrator:
         # Track the last tool used (set inside _execute_delegation)
         self._last_tool_used: Optional[str] = None
 
-    # ── Helpers ───────────────────────────────────────────────────────────────
+        # Background consolidation tasks — tracked so they can be cancelled on shutdown
+        self._background_tasks: list = []
+
+    # ── Helpers ─────────────────────────────────────────────────────────────
+
+    def _spawn_consolidation(self, user_id: str, user_text: str, ai_response: str):
+        """Create a background consolidation task and track it for clean shutdown."""
+        # Prune completed tasks from the list first
+        self._background_tasks = [t for t in self._background_tasks if not t.done()]
+        task = asyncio.create_task(
+            self.consolidator.consolidate(user_id, user_text, ai_response)
+        )
+        self._background_tasks.append(task)
+
+    def cancel_background_tasks(self):
+        """Cancel all pending background tasks (consolidation, etc.). Call on shutdown."""
+        for task in self._background_tasks:
+            if not task.done():
+                task.cancel()
+        self._background_tasks.clear()
 
     def _get_clipboard(self) -> str:
         try:
@@ -207,9 +227,7 @@ class BossOrchestrator:
                 emotion=emotion,
             )
             self._update_buffer(user_text, final_spoken)
-            asyncio.create_task(
-                self.consolidator.consolidate(user_id, user_text, final_spoken)
-            )
+            self._spawn_consolidation(user_id, user_text, final_spoken)
             return final_spoken
 
         # 2. Build boss prompt — inject clarification context if pending
@@ -232,7 +250,7 @@ class BossOrchestrator:
 
         # 3. Boss routing + intent synthesis (no 8b fallback for this critical call)
         try:
-            raw = await groq_proxy.call(
+            raw = await llm_proxy.call(
                 model=BOSS_MODEL,
                 messages=[
                     {"role": "system", "content": system_prompt},
@@ -310,9 +328,7 @@ class BossOrchestrator:
 
         # 6. Update buffer + background consolidation
         self._update_buffer(user_text, final_spoken)
-        asyncio.create_task(
-            self.consolidator.consolidate(user_id, user_text, final_spoken)
-        )
+        self._spawn_consolidation(user_id, user_text, final_spoken)
 
         return final_spoken
 

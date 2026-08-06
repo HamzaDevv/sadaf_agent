@@ -2,7 +2,7 @@
 brain/vision.py — Sadaf V4 Camera capture + Groq Vision
 
 V4 changes:
-  - Uses groq_proxy for all API calls (key rotation, rate management)
+  - Uses llm_proxy for all API calls (key rotation, rate management)
   - Otherwise identical pipeline: capture → vision → compress → TTS
 """
 import asyncio
@@ -12,7 +12,7 @@ import time
 from pathlib import Path
 
 import cv2
-from groq_proxy import groq_proxy
+from llm_proxy import llm_proxy
 from config import VISION_MODEL, CHAT_MODEL
 from utils import strip_think_tags
 
@@ -68,7 +68,7 @@ async def _raw_vision_response(image_path: str, query: str) -> str:
         "Be concise — 1-2 sentences maximum."
     )
 
-    from groq_proxy import groq_proxy as _proxy
+    from llm_proxy import llm_proxy as _proxy
     result = await _proxy.call(
         model=VISION_MODEL,
         messages=[
@@ -91,7 +91,7 @@ async def _raw_vision_response(image_path: str, query: str) -> str:
 
 async def _compress_vision_response(raw: str, query: str) -> str:
     """Compress verbose vision response into 1-2 spoken sentences via proxy."""
-    result = await groq_proxy.call(
+    result = await llm_proxy.call(
         model=CHAT_MODEL,
         messages=[
             {

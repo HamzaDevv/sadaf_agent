@@ -1,15 +1,15 @@
 import os
 from config import GROQ_API_KEYS, BOSS_MODEL, SUBAGENT_MODEL
-from groq_proxy import groq_proxy
+from llm_proxy import llm_proxy
 from tools.registry import TOOL_REGISTRY
 from tests.utils.fixtures import get_isolated_memory_store, cleanup_isolated_data
 
 def test_groq_api_keys_configured():
     assert len(GROQ_API_KEYS) > 0, "No Groq API keys found in config"
 
-def test_groq_proxy_singleton():
-    assert groq_proxy is not None, "groq_proxy singleton failed to initialize"
-    assert len(groq_proxy.keys) > 0, "groq_proxy has no keys"
+def test_llm_proxy_singleton():
+    assert llm_proxy is not None, "llm_proxy singleton failed to initialize"
+    assert len(llm_proxy.keys) > 0, "llm_proxy has no keys"
 
 def test_memory_store_init():
     run_id = "smoke_test"

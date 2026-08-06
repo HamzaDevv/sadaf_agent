@@ -17,7 +17,7 @@ Ignore examples: "А как тут, Карат?" (Russian side-talk), "bro wait"
 
 import re
 import json
-from groq_proxy import groq_proxy
+from llm_proxy import llm_proxy
 from config import CHAT_MODEL, PRIORITY_AGENT, AI_NAME
 
 
@@ -98,7 +98,7 @@ async def should_resume(user_text: str) -> bool:
     # Stage 2: name is present but no clear resumption keyword → ask LLM
     print(f"[PauseTool] Ambiguous wake — escalating to LLM: '{user_text}'")
     try:
-        raw_resume = await groq_proxy.call(
+        raw_resume = await llm_proxy.call(
             model=CHAT_MODEL,
             messages=[
                 {"role": "system", "content": _STRICT_RESUME_PROMPT},

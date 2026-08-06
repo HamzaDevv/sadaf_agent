@@ -26,3 +26,6 @@ test_memory_data/
 # Testing Data & Reports
 tests/reports/
 tests/temp_data/
+
+# Stress test logs
+tests/test_workflows/*.txt

@@ -76,17 +76,29 @@ def _human_duration(secs: int) -> str:
 
 # ── Background timer ──────────────────────────────────────────────────────────
 
-async def _run_timer(duration_secs: int, label: str):
+async def _run_timer(duration_secs: int, label: str, entry: dict):
     """Background task: sleep then speak alert."""
-    timer_entry = {"duration": duration_secs, "label": label, "done": False}
-    _active_timers.append(timer_entry)
+    try:
+        await asyncio.sleep(duration_secs)
+        entry["done"] = True
+        if _speak_fn:
+            msg = (
+                f"Time's up! Your {label} timer has finished."
+                if label
+                else "Time's up! Your timer has finished."
+            )
+            print(f"Sadaf: {msg}")
+            await _speak_fn(msg)
+    except asyncio.CancelledError:
+        entry["done"] = True  # Mark as done so callers don't retry
 
-    await asyncio.sleep(duration_secs)
 
-    timer_entry["done"] = True
-    if _speak_fn:
-        msg = f"Time's up! Your {label} timer has finished." if label else "Time's up! Your timer has finished."
-        await _speak_fn(msg)
+def cancel_all_timers():
+    """Cancel all pending timers. Call during test teardown or app shutdown."""
+    for entry in _active_timers:
+        task = entry.get("task")
+        if task and not task.done():
+            task.cancel()
 
 
 # ── Main tool function ────────────────────────────────────────────────────────
@@ -111,7 +123,9 @@ async def set_timer(query: str, speak_fn: Callable = None) -> str:
         if not any(unit in candidate for unit in TIME_UNITS_SECS):
             label = candidate
 
-    asyncio.create_task(_run_timer(duration_secs, label))
+    entry: dict = {"duration": duration_secs, "label": label, "done": False, "task": None}
+    _active_timers.append(entry)
+    entry["task"] = asyncio.create_task(_run_timer(duration_secs, label, entry))
 
     human = _human_duration(duration_secs)
     if label:

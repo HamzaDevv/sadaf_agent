@@ -5,7 +5,7 @@ Calculates time remaining until a named event or specific date
 by leveraging the LLM's knowledge.
 """
 from datetime import datetime
-from groq_proxy import groq_proxy
+from llm_proxy import llm_proxy
 from config import CHAT_MODEL
 
 
@@ -24,7 +24,7 @@ async def get_countdown(query: str) -> str:
     )
     
     try:
-        result = await groq_proxy.call(
+        result = await llm_proxy.call(
             model=CHAT_MODEL,
             messages=[
                 {"role": "system", "content": system_prompt},
