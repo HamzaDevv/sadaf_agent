@@ -28,8 +28,8 @@ Updated: 2026-10-11 (Asia/Kolkata).
 - Catalog rates and capabilities are volatile and not quality-tested. `:floor`
   is price-first and can trade availability/latency. See the cost update in
   `docs/REVIVAL_PLAN.md` and decision D017.
-- This change is not committed yet. Earlier untracked files and databases remain
-  untouched.
+- Provider implementation commit: `cb7c973fc35c82a93726ea5f0569b0af319ed4e`.
+  Earlier untracked files and databases remain untouched.
 
 ## Current position
 

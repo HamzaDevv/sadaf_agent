@@ -18,9 +18,9 @@ checks succeeded for DeepSeek chat, Qwen TTS, and Qwen ASR. ASR returned the
 expected short synthetic phrase and reported $0.00001134864; chat/TTS combined
 with ASR is estimated at about $0.00125, below the authorized $0.15 cap. Two
 malformed ASR fixtures returned 400 without usage data; billing status is
-unknown. No microphone was used, and generated speech was not played. The app
-change is uncommitted. Preserve untracked caches, review material, and local
-databases.
+unknown. No microphone was used, and generated speech was not played. Provider
+implementation commit: `cb7c973fc35c82a93726ea5f0569b0af319ed4e`. Preserve
+untracked caches, review material, and local databases.
 
 ## Resume here
 

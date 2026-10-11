@@ -31,8 +31,9 @@ be explicitly noted in a later entry.
   usage details. Fixed the active Qwen adapter to use OpenRouter's documented
   base64 JSON format and added fake-transport coverage.
 - Verification: `.venv/bin/python -m pytest -q` passed (133); targeted
-  compileall and whitespace checks passed. No commit; unrelated untracked files
-  and local databases remain untouched.
+  compileall and whitespace checks passed. Unrelated untracked files and local
+  databases remain untouched.
+- Provider implementation commit: `cb7c973fc35c82a93726ea5f0569b0af319ed4e`.
 
 ## 2026-10-11 — Persistent development state
 
