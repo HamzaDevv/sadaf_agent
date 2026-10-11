@@ -82,9 +82,9 @@ def load_settings(
 
     roles = {}
     for role, allowed, default, model, openrouter_model in (
-        ("reasoning", {"fake", "openrouter"}, "fake", "synthetic-reasoning", "openai/gpt-6.1-sol"),
-        ("extraction", {"fake", "openrouter"}, "fake", "synthetic-extraction", "openai/gpt-6-luna"),
-        ("voice", {"disabled", "fake", "openai"}, "disabled", "", ""),
+        ("reasoning", {"fake", "openrouter"}, "fake", "synthetic-reasoning", "deepseek/deepseek-v4.1-flash:floor"),
+        ("extraction", {"fake", "openrouter"}, "fake", "synthetic-extraction", "deepseek/deepseek-v4.1-flash:floor"),
+        ("voice", {"disabled", "fake", "openai", "openrouter"}, "disabled", "", "qwen/qwen-audio-3.0-tts-flash"),
         ("embeddings", {"disabled", "fake", "google"}, "disabled", "", ""),
     ):
         prefix = "SADAF_" + role.upper()

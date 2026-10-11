@@ -65,7 +65,7 @@ def test_live_roles_validate_model_and_credential_separately(tmp_path, role, pro
     values = {f"SADAF_{role}_PROVIDER": provider}
     if provider == "openrouter":
         result = settings(tmp_path, **{**values, key:"fixture-secret"})
-        assert result.reasoning.model == "openai/gpt-6.1-sol" if role == "REASONING" else result.extraction.model == "openai/gpt-6-luna"
+        assert result.reasoning.model == "deepseek/deepseek-v4.1-flash:floor" if role == "REASONING" else result.extraction.model == "deepseek/deepseek-v4.1-flash:floor"
     else:
         with pytest.raises(SettingsError, match=f"SADAF_{role}_MODEL"):
             settings(tmp_path, **values)

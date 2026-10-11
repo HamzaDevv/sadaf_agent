@@ -20,7 +20,7 @@ Sadaf is the persistent conversational partner. It understands the person, maint
 
 ## Model choices
 
-These are starting candidates, not a measured ranking of conversational quality. Confirm model/account access and recheck rates before integration. Pin model IDs for evaluations rather than silently tracking latest aliases.
+These were initial research candidates, not a measured ranking of conversational quality. The 2026-10-11 cost update below supersedes their always-on use. Pin model IDs for evaluations rather than silently tracking latest aliases.
 
 | Role | Starting candidate | Decision |
 | --- | --- | --- |
@@ -33,6 +33,45 @@ These are starting candidates, not a measured ranking of conversational quality.
 | Separate live speech recognition | Direct OpenAI `gpt-live-transcribe` | Use if we keep a chained architecture. Client-side speech endpoint detection is needed; this transcription model does not support server/semantic VAD. |
 | Bounded recording transcription | Direct OpenAI `gpt-transcribe` | Useful for recorded fixtures and a completed-utterance path. |
 | Offline development speech | Existing macOS `say` | Temporary fallback while validating the backend and waiting for an OpenAI key. |
+
+## Cost-oriented provider update (2026-10-11)
+
+The active legacy app now defaults to OpenRouter. Its reasoning, chat, agent,
+and vision roles use `deepseek/deepseek-v4.1-flash:floor`, and the continuous
+listener uses `qwen/qwen3-asr-0.6b`. The `:floor` suffix asks OpenRouter to pick
+the lowest-priced available provider. This is a price-first routing choice;
+availability, latency, and provider quality can vary. The newer standalone
+backend retains fake defaults and selects the same DeepSeek route only when its
+OpenRouter role is explicitly enabled.
+
+The current catalog lists DeepSeek V4.1 Flash base rates around $0.13/M input
+and $0.52/M output tokens, with discounted providers observed as low as
+$0.0348/M and $0.1392/M respectively; provider prices change. Qwen3 ASR 0.6B
+is listed at $0.000003/second. Optional Qwen Audio 3.0 TTS Flash is listed at
+$15/M characters. TTS is opt-in via `SADAF_VOICE_PROVIDER=openrouter`; local
+macOS `say` remains the default and has no provider charge. These rates are not
+a quality comparison or a promised per-session cost.
+
+Sources: [DeepSeek V4.1 Flash](https://openrouter.ai/deepseek/deepseek-v4.1-flash),
+[OpenRouter floor route](https://openrouter.ai/blog/announcements/introducing-nitro-and-floor-price-shortcuts/),
+[Qwen3 ASR 0.6B](https://openrouter.ai/qwen/qwen3-asr-0.6b),
+[Qwen Audio 3.0 TTS Flash](https://openrouter.ai/qwen/qwen-audio-3.0-tts-flash),
+[OpenRouter TTS guide](https://openrouter.ai/docs/guides/overview/multimodal/tts).
+At the time this configuration update was made, no generation, transcription,
+or synthesis request had been made.
+
+### Synthetic live check (2026-10-11)
+
+Within an explicit $0.15 test budget, DeepSeek V4.1 Flash `:floor` returned the
+requested synthetic phrase (50 input, 45 output tokens). Qwen Audio 3.0 TTS
+Flash returned MP3 audio for two short synthetic phrases. Qwen3 ASR 0.6B then
+transcribed one generated sample as `The synthetic reference code is Kilo
+Seven.` for 3.408 seconds of audio and reported $0.00001134864. Based on that
+usage and the current catalog TTS rate, combined spend is estimated around
+$0.00125. Two malformed ASR fixture requests returned 400 without usage fields,
+so their billing status is unknown. No microphone or real conversation data was
+used, and generated speech was not played. This is a connectivity and format
+check, not a quality evaluation.
 
 OpenRouter catalog base text rates observed: Sol $2 input / $10 output per million tokens; Luna $0.10 / $0.50; Sonnet 5.5 $2 / $10; Astra $10 / $50. These exclude reasoning-token effects, tools, cache writes, routing/account fees, and any long-context premiums. Do not treat a per-token rate as a per-conversation price. Official GPT-Live pricing was $0.05 per connected minute, with backend/tool costs separate: approximately $3 per connected hour before backend costs.
 

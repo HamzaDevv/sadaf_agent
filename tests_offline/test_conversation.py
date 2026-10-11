@@ -164,7 +164,7 @@ def test_openrouter_normalizes_calls_usage_and_minimal_payload():
     result = run(provider.complete([{"role":"user","content":"synthetic"}], tools=[{"type":"function"}]))
     assert requests[0][0].endswith("/chat/completions")
     payload = requests[0][2]
-    assert payload["model"] == "openai/gpt-6.1-sol" and payload["stream"] is False
+    assert payload["model"] == "deepseek/deepseek-v4.1-flash:floor" and payload["stream"] is False
     assert "temperature" not in payload and "store" not in payload and "previous_response_id" not in payload
     assert result.tool_calls == (ToolCall("c1","f",{"x":1}),) and result.usage == Usage(5,2)
 

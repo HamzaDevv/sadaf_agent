@@ -2,12 +2,43 @@
 
 Updated: 2026-10-11 (Asia/Kolkata).
 
+## Provider cost update (2026-10-11)
+
+- Changed active legacy application default from Groq to OpenRouter. Reasoning,
+  chat, agent, and vision model roles now use DeepSeek V4.1 Flash `:floor`
+  (lowest-priced provider routing); speech transcription uses Qwen3 ASR 0.6B.
+- The continuous listener now sends completed audio through the configured
+  proxy instead of constructing a Groq client directly.
+- Added an explicit `SADAF_VOICE_PROVIDER=openrouter` path for Qwen Audio 3.0
+  TTS Flash. It writes a temporary MP3 for macOS playback and deletes it after
+  playback. Default remains local `say`, so no provider TTS cost is incurred.
+- Standalone role settings remain fake by default; selecting OpenRouter uses
+  the same DeepSeek model for reasoning and extraction. Voice remains disabled
+  there unless explicitly selected.
+- Offline validation: 133 tests passed after adding the Qwen ASR JSON adapter and
+  fake request tests; targeted compileall and focused `git diff --check` passed.
+- Live synthetic validation: DeepSeek returned the exact requested check phrase
+  (50 input/45 output tokens); Qwen TTS returned MP3 audio for two short phrases;
+  Qwen ASR transcribed `The synthetic reference code is Kilo Seven.` from
+  generated audio (3.408 s audio, reported cost $0.00001134864). Estimated total
+  from reported usage and catalog TTS rates is about $0.00125, below the user's
+  $0.15 cap. Malformed fixture requests returned 400 without usage data; their
+  billing status is not exposed in the response. No microphone was used and
+  generated TTS audio was not played.
+- Catalog rates and capabilities are volatile and not quality-tested. `:floor`
+  is price-first and can trade availability/latency. See the cost update in
+  `docs/REVIVAL_PLAN.md` and decision D017.
+- This change is not committed yet. Earlier untracked files and databases remain
+  untouched.
+
 ## Current position
 
 Milestones 1–6 are implemented offline. M2 and voice use fakes because no M2
 contract or direct OpenAI voice credentials are available. A replaceable voice
-controller now wraps the new conversation backend; the legacy application loop
-and real legacy memory remain untouched. Live evaluation is pending.
+controller now wraps the new conversation backend. The legacy application path
+has provider configuration and listener/speaker adapter changes, but its
+conversation flow is still separate from that controller. Real legacy memory
+remains untouched. Live evaluation is pending.
 
 Milestone 3 implementation commit: `578282502bc7ff81bbacb24107cbe2fd80a6ccc3`.
 

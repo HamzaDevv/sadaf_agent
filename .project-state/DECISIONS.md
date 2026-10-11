@@ -153,3 +153,16 @@ and separate labeled costs. Direct OpenAI credentials/access and actual audio
 are unverified, and no model winner is selected. macOS clean process completion
 is a limited playback proxy; interrupted prefixes remain unconfirmed without a
 real player mapping. Binding policies continue to be enforced in the backend.
+
+## D017 — Price-first OpenRouter defaults with local speech
+
+Accepted: 2026-10-11. Set the active legacy application default to OpenRouter
+DeepSeek V4.1 Flash `:floor` for reasoning/chat/agent/vision and Qwen3 ASR 0.6B
+for transcription. The floor route favors the cheapest available provider and
+may trade availability or latency; catalog rates are volatile and this is not a
+quality winner. Keep the standalone backend fake by default. Use local macOS
+`say` as the zero-provider-cost speech default; expose Qwen Audio 3.0 TTS Flash
+only through explicit voice opt-in. Live billing, recognition, quality, and
+quality were not evaluated. Tiny synthetic live requests confirmed chat, TTS,
+and ASR reachability within the $0.15 test budget; no microphone or playback was
+tested.

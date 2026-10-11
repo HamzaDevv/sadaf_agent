@@ -2,13 +2,35 @@
 
 Updated: 2026-10-11 (Asia/Kolkata).
 
+## Current provider configuration
+
+The active legacy app defaults to OpenRouter with DeepSeek V4.1 Flash `:floor`
+for chat/model roles and Qwen3 ASR 0.6B for transcription. Set
+`AI_PROVIDER` to another supported provider to override the default. The direct
+continuous listener uses `llm_proxy.transcribe` now. Paid Qwen Audio 3.0 TTS
+Flash is opt-in with `SADAF_VOICE_PROVIDER=openrouter`; local macOS `say`
+remains the $0 default. The standalone backend still uses fake providers unless
+its role settings explicitly opt into OpenRouter.
+
+Latest offline checks: `.venv/bin/python -m pytest -q` (133 passed), targeted
+compileall, configuration probe, and focused `git diff --check`. Live synthetic
+checks succeeded for DeepSeek chat, Qwen TTS, and Qwen ASR. ASR returned the
+expected short synthetic phrase and reported $0.00001134864; chat/TTS combined
+with ASR is estimated at about $0.00125, below the authorized $0.15 cap. Two
+malformed ASR fixtures returned 400 without usage data; billing status is
+unknown. No microphone was used, and generated speech was not played. The app
+change is uncommitted. Preserve untracked caches, review material, and local
+databases.
+
 ## Resume here
 
 Milestones 1–6 are complete offline. Milestone 6 wraps the standalone conversation
 backend with voice lifecycle and playback-aware history. The legacy `main.py`
-voice loop and real memory store remain untouched. No live provider, microphone,
-actual macOS speech process, or M2 service was exercised. Direct OpenAI voice
-credentials are absent; no M2 contract is available.
+conversation flow remains separate, though its provider, listener, and speaker
+configuration now support the cheaper OpenRouter path. The real memory store
+remains untouched. No live provider, microphone, actual macOS speech process,
+or M2 service was exercised. Direct OpenAI voice credentials are absent; no M2
+contract is available.
 
 Next: obtain a real M2 contract and/or a consented Live/microphone/player adapter,
 validate its semantic mapping, and explicitly opt into synthetic live evaluation.

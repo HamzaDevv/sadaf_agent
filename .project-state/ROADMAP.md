@@ -16,3 +16,9 @@ Design rationale: [revival plan](../docs/REVIVAL_PLAN.md).
 Complete milestones sequentially. Partial progress belongs in `STATUS.md`;
 do not advance a milestone just because its files exist. Provider credentials
 and a real harness affect live integration, not completion of offline scaffolding.
+
+2026-10-11 provider cost update: the legacy app now defaults to OpenRouter
+DeepSeek V4.1 Flash `:floor` and Qwen3 ASR 0.6B. Optional paid Qwen Audio 3.0
+TTS Flash is available; local macOS speech remains default. Tiny synthetic live
+requests checked chat/TTS/ASR reachability within the user's $0.15 limit. No
+provider quality evaluation or microphone/playback check was performed.

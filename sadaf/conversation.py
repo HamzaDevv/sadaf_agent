@@ -413,9 +413,11 @@ class OpenRouterProvider:
     verified_model_capabilities = {
         "openai/gpt-6.1-sol": frozenset({"tools", "streaming"}),
         "openai/gpt-6-luna": frozenset({"tools", "streaming"}),
+        "deepseek/deepseek-v4.1-flash": frozenset({"tools", "streaming"}),
+        "deepseek/deepseek-v4.1-flash:floor": frozenset({"tools", "streaming"}),
     }
 
-    def __init__(self, api_key: str, model: str = "openai/gpt-6.1-sol", *,
+    def __init__(self, api_key: str, model: str = "deepseek/deepseek-v4.1-flash:floor", *,
                  timeout: float = 45, retries: int = 2, fallback_model: str | None = None,
                  capabilities: Iterable[str] | None = None,
                  transport: Callable[[str, Mapping[str, str], bytes, float], tuple[int, bytes]] | None = None,

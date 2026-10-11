@@ -9,6 +9,9 @@ class ProxyFactory:
         elif AI_PROVIDER == "deepseek":
             from .deepseek_impl import DeepSeekProxyImpl
             return DeepSeekProxyImpl()
+        elif AI_PROVIDER == "openrouter":
+            from .openrouter_impl import OpenRouterProxyImpl
+            return OpenRouterProxyImpl()
         else:
             from .groq_impl import GroqProxyImpl
             return GroqProxyImpl()

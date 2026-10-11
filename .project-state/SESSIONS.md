@@ -3,6 +3,37 @@
 Append new entries in date order. Preserve earlier entries; corrections should
 be explicitly noted in a later entry.
 
+## 2026-10-11 — Lower-cost OpenRouter provider configuration
+
+- Checked OpenRouter's public catalog for DeepSeek V4.1 Flash, Qwen3 ASR 0.6B,
+  and Qwen Audio 3.0 TTS Flash. Selected the DeepSeek `:floor` route for price-
+  first provider selection, with variable availability and pricing recorded.
+- Changed the legacy app default to OpenRouter, routed its continuous listener
+  through the shared proxy, and selected Qwen ASR. Added optional Qwen TTS
+  synthesis/playback, gated by `SADAF_VOICE_PROVIDER=openrouter`; macOS `say`
+  remains the default. Kept the new backend's providers fake by default.
+- Verification: 131 offline tests passed; targeted compileall, model config
+  probe, and focused whitespace check passed. TTS used a fake transport. No
+  provider request, microphone, or audio playback occurred.
+- No commit. Untracked caches and local databases preserved. Next: validate
+  quality/cost with opt-in synthetic provider runs only after explicit request.
+
+## 2026-10-11 — Bounded live model and speech checks
+
+- At the user's request, ran one tiny synthetic DeepSeek chat request, two short
+  Qwen TTS requests, and one successful Qwen ASR transcription. The recognized
+  phrase matched `The synthetic reference code is Kilo Seven.` ASR reported
+  3.408 seconds and $0.00001134864. Estimated combined cost was about $0.00125,
+  below the $0.15 user budget. No microphone, personal memory, or real dialogue
+  was used; generated speech was not played.
+- Two ASR calls failed before inference because one multipart request was
+  incompatible and a local speech fixture had zero duration; neither returned
+  usage details. Fixed the active Qwen adapter to use OpenRouter's documented
+  base64 JSON format and added fake-transport coverage.
+- Verification: `.venv/bin/python -m pytest -q` passed (133); targeted
+  compileall and whitespace checks passed. No commit; unrelated untracked files
+  and local databases remain untouched.
+
 ## 2026-10-11 — Persistent development state
 
 - Created `.project-state/` with status, roadmap, decisions, handoff, this log,

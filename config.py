@@ -27,9 +27,10 @@ GOOGLE_API_KEY  = os.getenv("GOOGLE_API_KEY", "")
 TAVILY_API_KEY  = os.getenv("TAVILY_API_KEY", "")
 GNEWS_API_KEY   = os.getenv("GNEWS_API_KEY", "")
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "")
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
 
 # ── AI Provider Configuration ─────────────────────────────────────────────────
-AI_PROVIDER = os.getenv("AI_PROVIDER", "groq").lower()
+AI_PROVIDER = os.getenv("AI_PROVIDER", "openrouter").lower()
 
 
 # ── Privacy / Behaviour Flags ─────────────────────────────────────────────────
@@ -45,7 +46,13 @@ REMINDERS_FILE = os.path.join(os.path.dirname(__file__), "memories", "reminders.
 AI_NAME = "Sadaf"
 
 # ── Model Selection ───────────────────────────────────────────────────────────
-if AI_PROVIDER == "gemini":
+if AI_PROVIDER == "openrouter":
+    # Cheapest-provider routing is deliberate; routing availability may vary.
+    BOSS_MODEL     = "deepseek/deepseek-v4.1-flash:floor"
+    SUBAGENT_MODEL = "deepseek/deepseek-v4.1-flash:floor"
+    CHAT_MODEL     = "deepseek/deepseek-v4.1-flash:floor"
+    VISION_MODEL   = "deepseek/deepseek-v4.1-flash:floor"
+elif AI_PROVIDER == "gemini":
     BOSS_MODEL     = "gemini-flash-latest"       # Real current-gen flash model
     SUBAGENT_MODEL = "gemini-flash-lite-latest"  # Cheapest/fastest free tier
     CHAT_MODEL     = "gemini-flash-lite-latest"
@@ -61,7 +68,8 @@ else:
     CHAT_MODEL     = "llama-3.1-8b-instant"     # Fallback chat model
     VISION_MODEL   = "qwen/qwen3.6-27b"  # Camera / Vision (multimodal)
 
-STT_MODEL      = "whisper-large-v3-turbo"   # Fast Groq speech-to-text
+STT_MODEL      = ("qwen/qwen3-asr-0.6b" if AI_PROVIDER == "openrouter"
+                  else "whisper-large-v3-turbo")
 
 # ── Why this split? ─────────────────────────────────────────────────────────
 # 70b is only used for the boss orchestrator (routing + intent synthesis).

@@ -4,7 +4,7 @@ Replaces listen.py. Provides:
   - Continuous PyAudio frame reading (30ms chunks)
   - WebRTC VAD for speech/silence detection
   - Barge-in detection: sets interrupt_event if speech occurs during SPEAKING state
-  - Automatic utterance segmentation → Groq Whisper transcription
+  - Automatic utterance segmentation → configured speech transcription provider
 """
 import asyncio
 import io
@@ -17,10 +17,9 @@ import webrtcvad
 import wave
 import numpy as np
 import noisereduce as nr
-from groq import AsyncGroq
+from llm_proxy import llm_proxy
 
 from config import (
-    GROQ_API_KEY,
     STT_MODEL,
     VAD_AGGRESSIVENESS,
     VAD_FRAME_MS,
@@ -34,7 +33,6 @@ from config import (
 FRAME_SIZE = int(VAD_SAMPLE_RATE * VAD_FRAME_MS / 1000)   # samples per frame
 BYTES_PER_FRAME = FRAME_SIZE * 2                            # 16-bit mono
 
-groq_client = AsyncGroq(api_key=GROQ_API_KEY)
 _vad = webrtcvad.Vad(VAD_AGGRESSIVENESS)
 
 
@@ -206,12 +204,10 @@ class ContinuousListener:
             clean_pcm = await asyncio.to_thread(_denoise_pcm, pcm_bytes)
             wav_bytes = _pcm_to_wav_bytes(clean_pcm)
 
-            transcription = await groq_client.audio.transcriptions.create(
-                file=("audio.wav", wav_bytes),
-                model=STT_MODEL,
-                response_format="text",
+            text = await llm_proxy.transcribe(
+                file_tuple=("audio.wav", wav_bytes), model=STT_MODEL, response_format="text",
             )
-            text = str(transcription).strip()
+            text = (text or "").strip()
             if text:
                 print(f"\nYou: {text}")
                 await self.utterance_queue.put(text)
