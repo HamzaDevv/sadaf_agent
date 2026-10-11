@@ -21,4 +21,4 @@ wikipedia
 pyvis
 networkx
 chromadb
-google-generativeai
+google-genai>=1.19,<3
