@@ -62,6 +62,6 @@ be explicitly noted in a later entry.
   API invented, no provider/voice/M2 run, no real-memory read or migration.
 - Limits: prose conflicts need review, local CAS is cooperative, snapshots are
   optimistic, host authenticates owners, and orchestration must act on flags.
-- Implementation commit: recorded in the follow-up handoff commit.
+- Implementation commit: `578282502bc7ff81bbacb24107cbe2fd80a6ccc3`.
 - Next: milestone 4 typed conversation context, provider/tool normalization,
   thread continuity; integrate project preparation blockers with fakes first.

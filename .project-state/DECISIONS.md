@@ -88,3 +88,5 @@ not arbitrary external editors; multi-source snapshots are optimistic. Existing
 tasks retain original scope and receive revalidation flags for changed policy or
 context. Actual task lifecycle reactions belong to milestone 5. No cloud wire
 protocol or M2 endpoint is assumed; offline tests use an opaque-revision fake.
+
+Milestone 3 implementation: `578282502bc7ff81bbacb24107cbe2fd80a6ccc3` (offline only).

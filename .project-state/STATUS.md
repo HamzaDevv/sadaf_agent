@@ -4,11 +4,11 @@ Updated: 2026-10-11 (Asia/Kolkata).
 
 ## Current position
 
-Milestones 1–3 are implemented; milestone 3 is verified offline. The existing voice loop and
+Milestones 1–3 are implemented and committed; milestone 3 is verified offline. The existing voice loop and
 legacy memory store have not been replaced, started, or migrated during this
 session. Milestones 4–6 remain pending.
 
-Milestone 3 implementation commit: recorded in the follow-up handoff commit.
+Milestone 3 implementation commit: `578282502bc7ff81bbacb24107cbe2fd80a6ccc3`.
 
 ## Completed
 

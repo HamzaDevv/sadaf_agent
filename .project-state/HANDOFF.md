@@ -7,7 +7,7 @@ Updated: 2026-10-11 (Asia/Kolkata).
 Milestones 1–3 are complete offline. Milestone 1 implementation commit:
 `b1eeb43bfa7b8cbbac99dba8bcb6164377d60085`. Milestone 2 implementation commit:
 `fd5fa2672d62c2cbf79a48aa77fc5228408c98ff` (verified in this session).
-Milestone 3 implementation commit: recorded in the follow-up handoff commit.
+Milestone 3 implementation commit: `578282502bc7ff81bbacb24107cbe2fd80a6ccc3`.
 Next implement milestone 4 using Session 4 in `../docs/IMPLEMENTATION_PROMPTS.md`.
 Do not repeat architecture research or implement an invented M2/cloud API.
 
