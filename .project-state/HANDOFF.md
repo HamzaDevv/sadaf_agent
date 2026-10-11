@@ -4,17 +4,18 @@ Updated: 2026-10-11 (Asia/Kolkata).
 
 ## Resume here
 
-Milestone 1 is complete. Implementation commit: `b1eeb43bfa7b8cbbac99dba8bcb6164377d60085`.
-Next implement
-milestone 2 using Session 2 in `../docs/IMPLEMENTATION_PROMPTS.md`. Read current
-status and this handoff; do not repeat the architecture research.
+Milestones 1 and 2 are complete. Milestone 1 implementation commit:
+`b1eeb43bfa7b8cbbac99dba8bcb6164377d60085`. Milestone 2 commit hash will be
+recorded here after its focused commit. Next implement milestone 3 using
+Session 3 in `../docs/IMPLEMENTATION_PROMPTS.md`. Do not repeat the architecture
+research.
 
-Start by reviewing `sadaf/settings.py`, `sadaf/runtime.py`, the legacy graph
-schema, and migration code without instantiating graph/provider clients.
-Implement SQLite memory behind an interface with read-only semantics, then test
-only against temporary synthetic fixtures. Design dry-run, backed-up, idempotent
-migration into a separate target. Do not read or migrate real legacy memories.
-Commit only deliberate milestone 2 files/hunks; do not push.
+Create local Markdown project templates and a project registry. Validate
+authorized context roots, policy authority, deterministic mandatory-rule
+loading, document revisions, conditional updates, and project isolation. Use
+temporary repositories and fakes to test conflicts/stale revisions. Do not
+invent a cloud service or M2 endpoint. Do not open or migrate real memories.
+Commit only deliberate milestone 3 files/hunks; do not push.
 
 ## Context to retain
 
@@ -32,14 +33,14 @@ Commit only deliberate milestone 2 files/hunks; do not push.
 ## Open dependencies
 
 Actual M2 protocol, cloud document service, live voice access, and measured model
-selection remain unresolved. Milestone 1 is verified offline only. The legacy
-graph has read-time pruning and unsafe migration behavior; milestone 2 must
-preserve real memory and use synthetic fixtures.
+selection remain unresolved. Milestones 1 and 2 are verified offline only. The
+legacy graph has read-time pruning and unsafe migration behavior; leave real
+memory untouched and use synthetic fixtures.
 
 ## Suggested resume prompt
 
 ```text
 Read AGENTS.md and .project-state/README.md, STATUS.md, and HANDOFF.md.
-Continue milestone 1 using Session 1 in docs/IMPLEMENTATION_PROMPTS.md.
+Continue milestone 3 using Session 3 in docs/IMPLEMENTATION_PROMPTS.md.
 Preserve existing work, verify offline, and update the persistent state before finishing.
 ```

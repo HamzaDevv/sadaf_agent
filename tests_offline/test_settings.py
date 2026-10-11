@@ -41,7 +41,6 @@ def test_explicit_dotenv_environment_precedence_and_redaction(tmp_path):
     ("SADAF_DATA_DIR", "memories/nested"),
     ("SADAF_DATA_DIR", "."),
     ("SADAF_PROFILE_PATH", "memories/profile.md"),
-    ("SADAF_PERSONA_PATH", ".sadaf-dev/profile.md"),
     ("SADAF_M2_ENDPOINT", "ftp://fixture.invalid"),
     ("SADAF_M2_ENDPOINT", "https://secret:secret@fixture.invalid"),
     ("SADAF_M2_ENDPOINT", "https://fixture.invalid/?key=secret"),
@@ -85,9 +84,15 @@ def test_data_symlink_cannot_alias_legacy(tmp_path):
 
 def test_profile_symlink_cannot_escape(tmp_path):
     (tmp_path / ".sadaf-dev").mkdir()
-    (tmp_path / ".sadaf-dev/profile.md").symlink_to(tmp_path / "outside.md")
+    (tmp_path / ".sadaf-dev/profiles/default-37a8eec1.md").parent.mkdir(parents=True)
+    (tmp_path / ".sadaf-dev/profiles/default-37a8eec1.md").symlink_to(tmp_path / "outside.md")
     with pytest.raises(SettingsError, match="inside"):
-        settings(tmp_path)
+        settings(tmp_path, SADAF_PROFILE_PATH=".sadaf-dev/profiles/{user_id}.md")
+
+
+def test_profile_template_cannot_collide_with_persona(tmp_path):
+    with pytest.raises(SettingsError,match="separate"):
+        settings(tmp_path,SADAF_PERSONA_PATH=".sadaf-dev/profiles/default-37a8eec1.md")
 
 
 def test_role_and_path_overrides_are_independent(tmp_path):
@@ -95,7 +100,7 @@ def test_role_and_path_overrides_are_independent(tmp_path):
                       SADAF_EXTRACTION_MODEL="fixture/extract", SADAF_DATA_DIR="fixture-data",
                       SADAF_M2_ENDPOINT="http://localhost:9000/service")
     assert result.reasoning.model != result.extraction.model
-    assert result.profile_path == tmp_path / "fixture-data/profile.md"
+    assert result.profile_path == tmp_path / "fixture-data/profiles/{user_id}.md"
     assert result.persona_path == tmp_path / "fixture-data/persona.md"
     assert result.m2_endpoint == "http://localhost:9000/service"
 
@@ -107,6 +112,7 @@ def test_existing_data_file_is_rejected(tmp_path):
 
 
 def test_existing_profile_directory_is_rejected(tmp_path):
-    (tmp_path / ".sadaf-dev/profile.md").mkdir(parents=True)
-    with pytest.raises(SettingsError, match="files"):
-        settings(tmp_path)
+    (tmp_path / ".sadaf-dev/profiles/default-37a8eec1.md").mkdir(parents=True)
+    with pytest.raises(ValueError, match="must be files"):
+        from sadaf.memory import MemoryStore
+        MemoryStore(tmp_path / ".sadaf-dev/memory.sqlite3")

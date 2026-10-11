@@ -4,9 +4,9 @@ Updated: 2026-10-11 (Asia/Kolkata).
 
 ## Current position
 
-Milestone 1, the offline foundation, is implemented and committed. The existing
-voice/memory application has not been replaced, started, or migrated during
-this session. Milestones 2–6 remain pending.
+Milestones 1 and 2 are implemented and committed. The existing voice loop and
+legacy memory store have not been replaced, started, or migrated during this
+session. Milestones 3–6 remain pending.
 
 Implementation commit: `b1eeb43bfa7b8cbbac99dba8bcb6164377d60085`.
 
@@ -31,6 +31,24 @@ Implementation commit: `b1eeb43bfa7b8cbbac99dba8bcb6164377d60085`.
 - Default pytest collection is scoped to `tests_offline/`; the suite blocks
   network connections and verifies settings, injection, CLI redaction/imports,
   and unchanged synthetic legacy data.
+- Added `MemoryRepository` with transactional SQLite episodes, scoped facts,
+  relationship edges, revision history, and an extraction outbox.
+- Facts retain turn/episode evidence, confirmation status, sensitivity/export
+  permissions, durability, and effective/expiry timestamps. Explicit profile
+  preferences are per-user Markdown sources and override extracted preference
+  facts; the assistant persona remains a separate editable file.
+- Added side-effect-free lexical recall using rebuildable SQLite FTS. Explicit
+  correction supersedes conflicting facts, expiry is a deliberate lifecycle
+  operation, and forgetting a key removes all its values, revisions, edges,
+  and index rows while cancelling and clearing queued extraction payloads.
+- Added validated extraction patches, job failure/no-fact distinction, and
+  recovery of stale processing jobs. SQLite writes do not depend on embeddings.
+- Replaced the legacy migration script with a dry-run-first importer for copied
+  graph/archive/episode fixtures. Apply is explicit, protects the configured
+  legacy path, backs up an existing SQLite target, and records idempotent imports.
+- Added synthetic fixture tests for concurrent writes, restart recall, evidence,
+  correction, expiry, forgetting, user/project isolation, outbox lifecycle,
+  backup, repeat import, and the migration CLI.
 
 ## Verification
 
@@ -49,12 +67,19 @@ Implementation commit: `b1eeb43bfa7b8cbbac99dba8bcb6164377d60085`.
   were left untouched.
 - Offline-only validation; no provider, voice, vector, M2, or real-memory
   integration was exercised.
+- `.venv/bin/python -m compileall -q sadaf scripts/migrate_memory.py tests_offline`
+  passed.
+- `.venv/bin/python -m pytest -q`: 66 passed.
+- Doctor, fake text mode, and `UV_CACHE_DIR=/tmp/sadaf-uv-cache uv sync --locked --offline` passed again.
+- Focused `git diff --check` for milestone 2 files passed. Tests used temporary
+  synthetic databases and copied JSON fixtures only.
 
 ## Next milestone
 
-Milestone 2: implement SQLite global memory with provenance and safe migration.
-Use Session 2 in `docs/IMPLEMENTATION_PROMPTS.md`. Work exclusively with copied
-synthetic fixtures; the real legacy memory directory remains untouched.
+Milestone 3: local Markdown project context, policy authority, revision
+snapshots, and project isolation. Use Session 3 in
+`docs/IMPLEMENTATION_PROMPTS.md`. Keep using temporary directories and fakes;
+the real legacy memory directory remains untouched.
 
 ## Dependencies and limitations
 
@@ -65,5 +90,13 @@ synthetic fixtures; the real legacy memory directory remains untouched.
   recheck capabilities before integration.
 - Legacy memory reads may prune data. Protect real memory throughout development.
 - Checkout contains substantial earlier unfinished work; see `EXISTING_WORK.md`.
-- The milestone 1 implementation commit hash is recorded in `HANDOFF.md` and
-  the session log.
+- Milestone 1 commit: `b1eeb43bfa7b8cbbac99dba8bcb6164377d60085`.
+- Record the milestone 2 implementation commit hash in the handoff and session
+  log after the focused commit is created.
+- Vector indexing, live extraction providers, and wiring the new store into the
+  legacy voice/application loop remain future work; no live integrations were
+  claimed.
+- Fact forgetting leaves its source episode as separate evidence; episode-level
+  deletion or redaction is not implemented. The SQLite adapter is not yet wired
+  into the legacy conversation loop, and Markdown-only memory exports are not
+  imported by the JSON fixture importer.

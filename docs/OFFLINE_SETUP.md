@@ -68,6 +68,56 @@ collection, pass `-c pytest.ini --confcutdir=tests_offline tests_offline`.
 Legacy tests require a separate explicit review; they are not part of the
 safe default test run.
 
+## Global memory foundation
+
+The opt-in `sadaf.memory.MemoryStore` implements the `MemoryRepository`
+interface and owns a SQLite database. Construct it with
+`MemoryStore.from_settings(settings)` only when the caller intends to initialize
+the local store. It creates editable `profile.md` and `persona.md` files if
+they do not exist; existing edits are retained. The profile is authoritative
+for explicitly written preferences. Extracted facts with the same preference
+key are omitted from recall; recall returns the profile override separately.
+The default profile setting is `.sadaf-dev/profiles/{user_id}.md`; each user
+gets a distinct editable file. Preference entries use a heading and bullets,
+such as `## Preferences` followed by `- **reply_style**: concise`.
+The persona belongs to Sadaf and is never treated as a user fact. A future
+conversation backend must consume these sources separately from generated
+memory exports. Any future export is a projection of database facts, not an
+independently writable source of truth.
+
+Episodes have user/project scope, source turn IDs, event time, and supporting
+text. Facts retain their scope, evidence links, confirmation state, revision
+trail, sensitivity, export permission, and effective/expiry timestamps.
+Extracted facts default to provisional, personal, and non-exportable. They
+cannot grant export permission in a model patch. A conflicting provisional
+value does not replace a confirmed fact. `correct_fact` is an explicit
+confirmed correction that supersedes active values for that key. `expire_fact`
+is an explicit lifecycle action; reads never perform decay or pruning.
+Enduring facts have no age-based deletion. SQLite FTS is a rebuildable lexical
+projection; recall only reads it.
+
+The extraction outbox distinguishes queued, processing, applied, no-facts,
+failed, and cancelled jobs. Invalid patches make no writes. Forgetting a fact
+removes all active and historical values for that user/scope/key, the FTS rows,
+revision contents, and attached edges. It records value hashes and cancels
+queued work in that scope while clearing its text payload, so old work cannot
+restore it. Reintroducing a forgotten value requires a confirmed write with
+source turn evidence. Episodes
+remain separately addressable evidence records; they are not returned by
+lexical fact recall.
+
+`scripts/migrate_memory.py --source COPIED_FIXTURES --target /tmp/memory.sqlite3`
+shows a dry-run plan. Add `--apply` to import. Applying to an existing SQLite
+target first creates a timestamped SQLite backup. Repeating the same source
+content is idempotent. Source and target paths that overlap the configured
+legacy memories directory are rejected. The importer understands copied
+`graph.json`, `archive.json`, and `episodes.json` fixtures plus graph session
+notes. It never opens a legacy graph store, embedding client, or real memory
+directory by itself. Use temporary synthetic fixtures during development.
+Vector indexing is not required by this milestone. If introduced later, it
+must remain a rebuildable projection; canonical SQLite writes and lexical
+recall do not depend on embedding services.
+
 ## Legacy graph and migration hazard
 
 Do not start `main.py`, instantiate `memory.graph_store.MemoryGraphStore`,

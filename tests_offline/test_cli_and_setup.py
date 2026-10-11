@@ -41,6 +41,7 @@ def blocked(*args, **kwargs):
     raise AssertionError("Forbidden network")
 socket.socket.connect = socket.socket.connect_ex = socket.create_connection = socket.getaddrinfo = blocked
 import sadaf, sadaf.settings, sadaf.runtime, sadaf.cli
+import sadaf.memory, sadaf.migration
 assert sadaf.cli.main(["--no-dotenv", "doctor"]) == 0
 assert sadaf.cli.main(["--no-dotenv", "text", "--message", "Synthetic setup probe"]) == 0
 '''

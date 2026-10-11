@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass, field
 import os
+import hashlib
 from pathlib import Path
 from typing import Mapping
 from urllib.parse import urlsplit
@@ -115,12 +116,18 @@ def load_settings(
     # Protect the actual legacy directory even if its setting is overridden.
     if _overlap(data, legacy) or _overlap(data, (root / "memories").resolve()):
         raise SettingsError("SADAF_DATA_DIR must be separate from legacy memories")
-    profile = path("SADAF_PROFILE_PATH", data / "profile.md")
+    profile = path("SADAF_PROFILE_PATH", data / "profiles" / "{user_id}.md")
     persona = path("SADAF_PERSONA_PATH", data / "persona.md")
     if any(p == data or data not in p.parents for p in (profile, persona)):
         raise SettingsError("Profile and persona paths must be inside SADAF_DATA_DIR")
     if _overlap(profile, persona):
         raise SettingsError("Profile and persona paths must be separate")
+    if "{user_id}" in str(profile):
+        default_profile=Path(str(profile).replace("{user_id}","default-"+hashlib.sha256(b"default").hexdigest()[:8]))
+        if default_profile.is_symlink() or (default_profile.exists() and not default_profile.is_file()) or data not in default_profile.resolve().parents:
+            raise SettingsError("Profile paths must be files inside SADAF_DATA_DIR")
+        if default_profile.resolve()==persona:
+            raise SettingsError("Profile and persona paths must be separate")
     if any(p.exists() and not p.is_file() for p in (profile, persona)):
         raise SettingsError("Profile and persona paths must be files")
     return Settings(**roles, data_dir=data, legacy_memory_dir=legacy,

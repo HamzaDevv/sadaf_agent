@@ -1,52 +1,46 @@
-import os
+"""Explicit, dry-run-first wrapper for importing a copied legacy fixture tree."""
+
+from __future__ import annotations
+
+import argparse
+import json
+from pathlib import Path
+import sqlite3
 import sys
-import re
 
-# Add project root to sys.path
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
-from memory.graph_store import MemoryGraphStore
-from config import DEFAULT_USER_ID
+from sadaf.migration import migrate_legacy
+from sadaf.settings import SettingsError, load_settings
 
-def migrate():
-    print(f"Migrating memories for {DEFAULT_USER_ID}...")
-    store = MemoryGraphStore()
-    user_dir = store._user_dir(DEFAULT_USER_ID)
-    
-    # Check if md files exist
-    if not user_dir.exists():
-        print(f"User directory not found: {user_dir}")
-        return
-        
-    for filename in os.listdir(user_dir):
-        if filename.endswith(".md") and filename not in ["_index.md", "sessions.md"]:
-            section = filename.replace(".md", "")
-            if section == "sadaf_user":
-                continue # Skip the orphaned monolith file
-                
-            filepath = user_dir / filename
-            content = filepath.read_text(encoding="utf-8")
-            
-            # Find all `- **Key**: Value`
-            matches = re.findall(r"- \*\*(.+?)\*\*: (.+)", content)
-            for key, value in matches:
-                value = value.strip()
-                if value and value.lower() not in ["unknown", "null", "not explicitly stated", "[]"]:
-                    store.upsert_node(DEFAULT_USER_ID, section, key, value)
-                    
-        elif filename == "sessions.md":
-            filepath = user_dir / filename
-            content = filepath.read_text(encoding="utf-8")
-            for line in content.splitlines():
-                if line.startswith("- ["):
-                    # e.g., "- [2026-07-20 15:40] User agreed to a personal conversation..."
-                    match = re.search(r"- \[(.+?)\] (.+)", line)
-                    if match:
-                        _, note = match.groups()
-                        store.append_session(DEFAULT_USER_ID, note)
-                        
-    print("Migration complete. Generating visualization...")
-    store.visualize(DEFAULT_USER_ID)
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--source", type=Path, required=True, help="Copied legacy fixture directory")
+    parser.add_argument("--target", type=Path, required=True, help="Separate SQLite destination")
+    parser.add_argument("--user-id", default="default")
+    parser.add_argument("--apply", action="store_true", help="Apply the planned import; existing targets are backed up")
+    args = parser.parse_args(argv)
+    try:
+        settings = load_settings()
+        report = migrate_legacy(args.source, args.target, user_id=args.user_id,
+                                apply=args.apply, legacy_root=settings.legacy_memory_dir)
+    except (SettingsError, ValueError, OSError, sqlite3.Error) as error:
+        print(f"Migration stopped: {error}", file=sys.stderr)
+        return 2
+    print(json.dumps({
+        "mode": "applied" if report.applied else "dry-run",
+        "already_imported": report.already_imported,
+        "facts": report.facts,
+        "edges": report.edges,
+        "episodes": report.episodes,
+        "digest": report.digest,
+        "backup_created": report.backup is not None,
+    }, indent=2))
+    return 0
+
 
 if __name__ == "__main__":
-    migrate()
+    raise SystemExit(main())

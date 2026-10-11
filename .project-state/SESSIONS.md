@@ -29,3 +29,19 @@ be explicitly noted in a later entry.
   synthetic text command passed; no live providers or real memories accessed.
 - Implementation commit: `b1eeb43bfa7b8cbbac99dba8bcb6164377d60085`.
 - Next: milestone 2 SQLite memory and safe synthetic-fixture migration.
+
+## 2026-10-11 — Milestone 2 scoped SQLite memory
+
+- Implemented the `MemoryRepository` contract and SQLite store for episodes,
+  facts, edges, revisions, extraction jobs, and forgotten-value tombstones.
+- Added evidence links and scoped recall; user profile Markdown is per-user,
+  assistant persona is separate, and explicit preference overrides take priority.
+- Added provisional conflict handling, explicit correction/expiry, lexical FTS,
+  validated extraction patches, stale-job recovery, and complete key forgetting
+  that purges revision values/index entries/edges and cancels queued extraction.
+- Replaced legacy migration with dry-run default, explicit apply, configured
+  path guard, SQLite backup, and idempotent fixture imports.
+- Verification: offline lock sync, compileall, doctor, fake text, and 66 tests
+  passed. Synthetic fixtures only; live providers and real memories untouched.
+- Commit: pending until the focused milestone 2 commit is created.
+- Next: milestone 3 local project Markdown, policy authority, revisions, and isolation.

@@ -48,3 +48,21 @@ separately. Pin CPython 3.13 and dependency resolution; keep audio and vector
 packages optional. New data defaults to ignored `.sadaf-dev/`; settings reject
 paths that overlap legacy memories. Correct the Google SDK requirement to
 `google-genai`, which supplies the existing `google.genai` import.
+
+## D008 — Transactional scoped memory
+
+Accepted: 2026-10-11. SQLite is the canonical store for episodes, facts, edges,
+revisions, extraction jobs, and deletion tombstones. Every record is user
+scoped and optionally project scoped. Reads are side-effect-free; SQLite FTS
+is a rebuildable lexical projection. Extracted facts remain provisional and
+non-exportable until an explicit application action confirms them. Explicit
+profile Markdown preferences outrank extracted preferences. Vector retrieval
+is optional and is not connected to canonical writes.
+
+## D009 — Safe legacy import boundary
+
+Accepted: 2026-10-11. Legacy import parses copied graph/archive/episode JSON
+without constructing the pruning legacy store. Planning is the default; apply
+requires an explicit flag, an independent target, and a backup when the target
+already exists. Repeated imports of the same source content are idempotent.
+Real legacy memory is not read or migrated during development.
