@@ -11,6 +11,13 @@ from memory.graph_store import MemoryGraphStore
 from memory.extractor import extract_facts
 from memory.schemas import EpisodicEvent, MemoryNode
 from config import CONSOLIDATOR_MAX_RETRIES, CONSOLIDATOR_RETRY_DELAY
+from config import VERBOSE_LOGS
+
+def _log_verbose(*args, **kwargs):
+    if VERBOSE_LOGS:
+        import builtins
+        builtins.print(*args, **kwargs)
+
 
 class MemoryConsolidator:
     def __init__(self, graph_store: MemoryGraphStore):
@@ -33,7 +40,7 @@ class MemoryConsolidator:
             is_rate_limit = "429" in err or "rate_limit" in err.lower() or "too many" in err.lower()
             if is_rate_limit and _attempt < CONSOLIDATOR_MAX_RETRIES:
                 delay = CONSOLIDATOR_RETRY_DELAY * (_attempt + 1)
-                print(
+                _log_verbose(
                     f"[Consolidator] 429 on attempt {_attempt + 1}/{CONSOLIDATOR_MAX_RETRIES}. "
                     f"Retrying in {delay:.0f}s (facts preserved)."
                 )
@@ -43,12 +50,20 @@ class MemoryConsolidator:
                 )
             else:
                 if is_rate_limit:
-                    print(f"[Consolidator] Max retries reached. Memory extraction dropped for this turn.")
+                    _log_verbose(f"[Consolidator] Max retries reached. Memory extraction dropped for this turn.")
                 else:
-                    print(f"[Consolidator] Error: {e}")
+                    _log_verbose(f"[Consolidator] Error: {e}")
 
     async def _run_consolidation(self, user_id: str, user_input: str, ai_response: str):
-        # Stage 0: Fetch existing nodes summary for comparison
+        # Stage 0: Heuristic Extraction Gating
+        import re
+        words = user_input.strip().split()
+        if len(words) <= 3 and not re.search(r"\b(i|my|me|i'm|mine)\b", user_input.lower()):
+            _log_verbose(f"[Consolidator] Skipping extraction for short turn: '{user_input}'")
+            await asyncio.to_thread(self.store.increment_conversation_count, user_id)
+            return
+
+        # Stage 0.5: Fetch existing nodes summary for comparison
         existing_summary = await asyncio.to_thread(self.store.get_nodes_summary, user_id)
 
         # Stage 1: Extract facts
@@ -71,7 +86,7 @@ class MemoryConsolidator:
             )
             await asyncio.to_thread(self.store.append_episode, user_id, ep)
 
-        # Stage 3: Handle Contradictions (Belief Updating)
+        # Stage 3: Handle Contradictions (Bayesian Belief Updating)
         for c in contradictions:
             node_id = c.get("node_id")
             new_val = c.get("new_value")
@@ -82,13 +97,13 @@ class MemoryConsolidator:
 
             sec, k = node_id.split(":", 1)
 
-            # 1. Lower confidence of old node
+            # 1. Lower confidence of old node via Bayesian update: P(old_fact|contradiction) = P_old * (1 - salience)
             old_node = await asyncio.to_thread(self.store.access_node, user_id, node_id)
             if old_node:
-                old_node.confidence = max(0.1, old_node.confidence - 0.3)
+                old_node.confidence = max(0.05, old_node.confidence * (1.0 - salience))
                 await asyncio.to_thread(self.store.upsert_node, user_id, old_node)
 
-            # 2. Create provisional node
+            # 2. Create provisional node with confidence derived from evidence salience
             prov_key = f"{k}_prov"
             prov_id = f"{sec}:{prov_key}"
 
@@ -98,13 +113,14 @@ class MemoryConsolidator:
                 key=prov_key,
                 value=new_val,
                 salience=salience,
+                confidence=min(1.0, 0.65 + (salience * 0.35)),
                 status="provisional"
             )
             await asyncio.to_thread(self.store.upsert_node, user_id, prov_node)
 
             # 3. Add supersedes edge
             await asyncio.to_thread(self.store.add_edge, user_id, prov_id, node_id, "supersedes")
-            print(f"[Consolidator] Created provisional contradiction: {prov_id} -[supersedes]-> {node_id}")
+            _log_verbose(f"[Consolidator] Created provisional contradiction: {prov_id} -[supersedes]-> {node_id}")
 
         # Stage 4: Upsert Nodes
         for fact in facts:
@@ -154,59 +170,60 @@ class MemoryConsolidator:
 
         # Stage 7: Lazy evaluate provisional nodes
         await asyncio.to_thread(self._evaluate_provisional_nodes, user_id)
-        # NOTE: Exceptions propagate up to consolidate() which handles retry.
-        # _run_consolidation raises so the retry logic can catch it.
 
     def _evaluate_provisional_nodes(self, user_id: str):
         """
-        Check if any provisional nodes have been reinforced enough (weight >= 1.2)
-        to replace the old node they supersede.
+        Check if any provisional nodes have been reinforced or have high confidence
+        (confidence >= 0.70 or edge weight >= 1.05) to replace the old node they supersede.
         """
         path = self.store._graph_path(user_id)
         data = self.store._load_json(path, {"nodes": {}, "edges": []})
-        
+
         edges = data.get("edges", [])
         nodes = data.get("nodes", {})
-        
+
         to_remove_edges = []
-        
+
         for edge in edges:
             if edge.get("relation") == "supersedes":
-                if edge.get("weight", 1.0) >= 1.15: # ~2 reinforcements
-                    prov_id = edge["from_node"]
-                    old_id = edge["to_node"]
-                    
-                    if prov_id in nodes and old_id in nodes:
-                        prov_dict = nodes[prov_id]
-                        
+                prov_id = edge["from_node"]
+                old_id = edge["to_node"]
+
+                if prov_id in nodes and old_id in nodes:
+                    prov_dict = nodes[prov_id]
+                    prov_conf = prov_dict.get("confidence", 0.5)
+                    edge_w = edge.get("weight", 1.0)
+
+                    # Bayesian promotion criterion: prov confidence >= 0.7 or edge reinforced
+                    if prov_conf >= 0.70 or edge_w >= 1.05:
                         # Archive old
                         old_node = MemoryNode(**nodes[old_id])
                         old_node.status = "archived"
-                        
+
                         archive_path = self.store._archive_path(user_id)
                         archive_data = self.store._load_json(archive_path, {"nodes": {}})
                         archive_data["nodes"][old_id] = old_node.model_dump()
                         self.store._save_json(archive_path, archive_data)
-                        
+
                         # Overwrite old node ID with new provisional data, making it active
                         new_active = MemoryNode(**prov_dict)
                         new_active.node_id = old_id
                         new_active.key = old_node.key
                         new_active.status = "active"
-                        
+
                         nodes[old_id] = new_active.model_dump()
-                        
+
                         # Remove the provisional node ID
                         del nodes[prov_id]
                         to_remove_edges.append(edge)
-                        
+
                         # Clean ChromaDB
                         try:
                             self.store.collection.delete(ids=[f"{user_id}::{prov_id}"])
                             self.store._sync_to_chroma(user_id, new_active)
                         except: pass
-                        
-                        print(f"[Consolidator] Lazy belief update: {prov_id} replaced {old_id}")
+
+                        _log_verbose(f"[Consolidator] Bayesian belief update: {prov_id} replaced {old_id}")
 
         if to_remove_edges:
             data["edges"] = [e for e in edges if e not in to_remove_edges]

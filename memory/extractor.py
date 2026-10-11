@@ -56,9 +56,12 @@ Rules:
 - CRITICAL: The AI companion's name is "Sadaf". NEVER extract the AI's name, identity, or statements as facts about the user.
 - CRITICAL: The "AI RESPONSE" section is provided for context only to understand what the user was replying to. DO NOT extract facts from it.
 - CRITICAL: Only extract facts EXPLICITLY stated in the interaction. Do NOT infer or invent.
+- CRITICAL: NEVER extract facts from user questions or inquiries (e.g., "What is my favorite food?", "Do you remember my name?"). Only extract explicit declarative statements.
 - CRITICAL: The user is speaking via a Speech-to-Text (STT) engine. Ignore obvious phonetic mishearings, garbled words, or fragmented phrases.
+- CRITICAL: If a fact belongs to a corporate/workplace context (e.g. workplace assessment or training), use the 'career' section. Use 'education' ONLY for formal academic degrees.
+- CRITICAL: If the user states an incomplete intent before exiting or changing topics (e.g., "I am going to buy..."), capture it in the session_note for future reference.
 - Compare new facts against the provided EXISTING MEMORY FACTS.
-- Contradictions: If a new fact directly contradicts an existing fact, list it in "contradictions". 
+- Contradictions: If a new fact directly contradicts an existing fact, list it in "contradictions".
 - Assign a "salience" [0.0 - 1.0] for facts and contradictions. E.g., Job/Location = 0.9, recent food/mood = 0.3.
 - If no new facts found: {"episodic_event": null, "facts": [], "edges": [], "contradictions": [], "session_note": null}
 """
@@ -83,14 +86,14 @@ async def extract_facts(user_input: str, ai_response: str, existing_facts_summar
         )
         if not raw:
             return {"episodic_event": None, "facts": [], "edges": [], "contradictions": [], "session_note": None}
-            
+
         patch = json.loads(raw)
-        
+
         # Ensure lists exist
         if "facts" not in patch: patch["facts"] = []
         if "edges" not in patch: patch["edges"] = []
         if "contradictions" not in patch: patch["contradictions"] = []
-            
+
         return patch
     except (json.JSONDecodeError, Exception) as e:
         print(f"[Extractor] Failed to extract facts: {e}")

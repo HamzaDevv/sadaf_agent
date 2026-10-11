@@ -15,18 +15,21 @@ from config import CHAT_MODEL
 
 # Map Gemini model names → nearest Groq equivalents
 _GEMINI_TO_GROQ: dict[str, str] = {
-    "gemini-2.0-flash":       "llama-3.3-70b-versatile",
-    "gemini-2.0-flash-lite":  "llama-3.1-8b-instant",
-    "gemini-1.5-flash":       "llama-3.3-70b-versatile",
-    "gemini-1.5-flash-8b":    "llama-3.1-8b-instant",
-    "gemini-1.5-pro":         "llama-3.3-70b-versatile",
+    "gemini-flash-latest":       "llama-3.3-70b-versatile",
+    "gemini-flash-lite-latest":  "llama-3.1-8b-instant",
+    "gemini-3.7-flash":          "llama-3.3-70b-versatile",
+    "gemini-2.0-flash":          "llama-3.3-70b-versatile",
+    "gemini-2.0-flash-lite":     "llama-3.1-8b-instant",
+    "gemini-1.5-flash":          "llama-3.3-70b-versatile",
+    "gemini-1.5-flash-8b":       "llama-3.1-8b-instant",
+    "gemini-1.5-pro":            "llama-3.3-70b-versatile",
 }
 
 def _groq_model(gemini_model: str) -> str:
     """Return the Groq equivalent for a Gemini model name."""
     return _GEMINI_TO_GROQ.get(gemini_model, "llama-3.1-8b-instant")
 
-def _is_rate_limited(result: Optional[str]) -> bool:
+def _is_rate_limited(result: Optional[Any]) -> bool:
     return result is None or (isinstance(result, str) and result.startswith("RATE_LIMIT:"))
 
 
@@ -47,6 +50,10 @@ class FallbackProxy(BaseLLMProxy):
         self._groq   = GroqProxyImpl()
         print(f"[FallbackProxy] Gemini keys: {len(self._gemini.keys)} | Groq keys: {len(self._groq.keys)}")
 
+    @property
+    def keys(self) -> List[Any]:
+        return self._gemini.keys + self._groq.keys
+
     # ── Non-streaming call ────────────────────────────────────────────────────
 
     async def call(
@@ -58,11 +65,14 @@ class FallbackProxy(BaseLLMProxy):
         max_tokens: int = 4000,
         response_format: Optional[Dict[str, Any]] = None,
         allow_fallback: bool = True,
-    ) -> Optional[str]:
+        tools: Optional[List[Dict[str, Any]]] = None,
+        timeout: Optional[float] = None,
+    ) -> Optional[Any]:
         result = await self._gemini.call(
             model=model, messages=messages, priority=priority,
             temperature=temperature, max_tokens=max_tokens,
             response_format=response_format, allow_fallback=allow_fallback,
+            tools=tools, timeout=timeout,
         )
 
         if _is_rate_limited(result) and allow_fallback:
@@ -72,6 +82,7 @@ class FallbackProxy(BaseLLMProxy):
                 model=groq_model, messages=messages, priority=priority,
                 temperature=temperature, max_tokens=max_tokens,
                 response_format=response_format,
+                tools=tools, timeout=timeout,
             )
 
         return result
@@ -151,3 +162,8 @@ class FallbackProxy(BaseLLMProxy):
         return await self._gemini.transcribe(
             file_tuple=file_tuple, model=model, response_format=response_format
         )
+
+    async def close(self):
+        """Close underlying Gemini and Groq clients cleanly."""
+        await self._gemini.close()
+        await self._groq.close()

@@ -8,6 +8,9 @@ V6 changes:
   - Memory Subagent strictly isolates user facts from AI context
   - vision_query intent fast-paths camera through orchestrator
 """
+import warnings
+warnings.filterwarnings("ignore", category=UserWarning, module="webrtcvad")
+
 import asyncio
 import time
 
@@ -23,6 +26,8 @@ from memory.memory_agent import MemoryAgent
 from memory.consolidator import MemoryConsolidator
 
 from brain.pre_processor import analyze_input
+from brain.intent_resolver import intent_resolver
+from brain.agent_core import AgentCore
 from tools.reminder import fire_pending_reminders
 from tools.timer_tool import set_speak_fn as timer_set_speak_fn
 from tools.pause_tool import should_resume
@@ -33,6 +38,7 @@ from config import (
     DEFAULT_USER_ID,
     RECORDING_TIME_IN_SECONDS,
     OUTPUT_FILE,
+    USE_V7_ORCHESTRATOR,
 )
 
 
@@ -68,6 +74,14 @@ async def run():
         consolidator=consolidator,
     )
 
+    agent_core = None
+    if USE_V7_ORCHESTRATOR:
+        agent_core = AgentCore(
+            memory_agent=agent,
+            consolidator=consolidator,
+            speaker_subagent=speaker_subagent
+        )
+
     graph_store.ensure_user_dir(DEFAULT_USER_ID)
     graph_store.increment_conversation_count(DEFAULT_USER_ID)
 
@@ -76,8 +90,24 @@ async def run():
     asyncio.create_task(fire_pending_reminders(speak_async_system))
 
     # ── Greeting ─────────────────────────────────────────────────────────────
-    print(f"Sadaf: Hey, I'm {AI_NAME}. I'm listening.")
-    await speak_async_system(f"Hey, I'm {AI_NAME}. I'm listening.")
+    # Fetch user name if available
+    all_nodes = graph_store.get_all_nodes(DEFAULT_USER_ID)
+    user_name = "there"
+    for nid, node in all_nodes.items():
+        if node.get("key") in ("name", "full_name"):
+            val = node.get("value", "")
+            if val and val.lower() not in ("none", ""):
+                user_name = val.split()[0]
+                break
+
+    last_sessions = graph_store.get_last_n_sessions(DEFAULT_USER_ID, 1)
+    if not last_sessions or "No past sessions" in last_sessions:
+        greeting = f"Hey, I'm {AI_NAME}. I'm listening."
+    else:
+        greeting = f"Hey {user_name}, welcome back! I'm listening."
+
+    print(f"Sadaf: {greeting}")
+    await speak_async_system(greeting)
 
     session_start = time.time()
     running       = True
@@ -116,7 +146,11 @@ async def run():
                 continue
 
             # 2. Cognitive Pre-Processing (only runs when NOT paused)
-            analysis   = await analyze_input(user_text)
+            if USE_V7_ORCHESTRATOR:
+                analysis = await intent_resolver.resolve(user_text)
+            else:
+                analysis = await analyze_input(user_text)
+
             clean_text = analysis["clean_text"]
             intent     = analysis["intent"]
             emotion    = analysis["emotion"]
@@ -143,12 +177,20 @@ async def run():
             # 4. Boss Orchestrator Processing
             # vision_query intent is handled as a fast-path inside the orchestrator.
             # All other intents (tool, speak, clarify) are also routed inside.
-            final_spoken = await orchestrator.process(
-                user_id=DEFAULT_USER_ID,
-                user_text=clean_text,
-                emotion=emotion,
-                intent=intent,
-            )
+            if USE_V7_ORCHESTRATOR:
+                final_spoken = await agent_core.process(
+                    user_id=DEFAULT_USER_ID,
+                    user_text=clean_text,
+                    emotion=emotion,
+                    intent=intent,
+                )
+            else:
+                final_spoken = await orchestrator.process(
+                    user_id=DEFAULT_USER_ID,
+                    user_text=clean_text,
+                    emotion=emotion,
+                    intent=intent,
+                )
 
             print(f"Sadaf: {final_spoken}")
             await speak_async_system(final_spoken)

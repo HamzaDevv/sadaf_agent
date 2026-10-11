@@ -42,18 +42,22 @@ ABSOLUTE RULES:
 3. Do NOT hallucinate tools. If it is not in the list above, you cannot do it.
 4. SPOKEN OUTPUT RULE: Any text in "direct_response" or "clarify_question" must be
    SHORT, NATURAL, CONVERSATIONAL — like a real person talking (1–3 sentences max).
-   Never produce bullet lists or lengthy paragraphs in those fields.
+   Never produce raw JSON, bullet lists, or lengthy paragraphs in those fields.
+5. CAPABILITY QUESTIONS: If the user asks what tools, actions, or capabilities you have
+   (e.g., "what can you do?", "what are your actions?", "what tools do you have?"),
+   choose delegate_to "speak" and explain your main capabilities concisely in direct_response.
 
 ROUTING DECISION — choose ONE:
 - "tool"   → user needs an action/capability. ALWAYS synthesize the full intent.
 - "vision" → user wants the camera ("what am I holding", "look at this")
 - "clarify"→ a tool is clearly needed BUT key information is still missing
-- "speak"  → pure conversation, greetings, or anything requiring no tool
+- "speak"  → pure conversation, greetings, questions about your capabilities, or anything requiring no tool
 
 {clarification_context}
 
 CONTEXT:
 Memory:
+(MEMORY AWARENESS: This section contains facts and context from past conversations. If the user asks about something from a past conversation, CHECK this section first before saying "I don't know".)
 {memory_context}
 
 Recent Conversation:
@@ -209,6 +213,19 @@ class BossOrchestrator:
 
         # Apply prompt budget: trim before injecting into boss prompt
         memory_context, recent_history = self._trim_to_budget(memory_context, recent_history)
+
+        # Fast-path: dismiss intent
+        if intent == "dismiss":
+            self._pending_clarification = None
+            speaker_content = "Alright, what's next?"
+            final_spoken = await self.speaker.speak(
+                content=speaker_content,
+                user_name=user_display_name,
+                emotion=emotion,
+            )
+            self._update_buffer(user_text, final_spoken)
+            self._spawn_consolidation(user_id, user_text, final_spoken)
+            return final_spoken
 
         # Fast-path: vision_query intent → skip boss LLM routing
         if intent == "vision_query":
@@ -397,7 +414,11 @@ class BossOrchestrator:
         else:  # "speak"
             # Clear clarification state if user moved on to conversation
             self._pending_clarification = None
-            return decision.get("direct_response") or "I'm not sure how to respond to that."
+            resp = decision.get("direct_response")
+            if not resp or str(resp).strip().lower() in ("none", "null", ""):
+                resp = f"I'm right here with you, {user_display_name}. How can I help?"
+            return resp
+
 
     def _resolve_tool_result(self, tool_res: dict) -> str:
         """Translates tool result into speaker-ready content."""

@@ -249,18 +249,35 @@ async def _schedule_reminder(fire_at: datetime, message: str):
 
 # ── Main Tool Function ────────────────────────────────────────────────────────
 
-async def set_reminder(query: str, speak_fn: Callable = None) -> str:
+async def set_reminder(query: str = "", speak_fn: Callable = None, message: str = "", fire_at_iso: str = "") -> str:
     """
     Parse user query and schedule a reminder.
     Supports relative ("in 10 minutes"), day-of-week ("on Friday at 9pm"),
     and tomorrow references ("tomorrow at 8am").
+    Now supports explicit typed kwargs via function calling.
     """
     global _speak_fn
     if speak_fn:
         _speak_fn = speak_fn
 
-    delay_secs = _parse_delay_seconds(query)
-    message = _parse_message(query)
+    delay_secs = None
+    if fire_at_iso:
+        try:
+            # Handle ISO string from LLM
+            fire_at_dt = datetime.fromisoformat(fire_at_iso.replace('Z', '+00:00'))
+            # Assume local time for now if naive, or calc diff
+            if fire_at_dt.tzinfo:
+                now_aware = datetime.now().astimezone()
+                delay_secs = max(0, int((fire_at_dt - now_aware).total_seconds()))
+            else:
+                delay_secs = max(0, int((fire_at_dt - datetime.now()).total_seconds()))
+        except Exception as e:
+            print(f"[set_reminder] Error parsing fire_at_iso: {e}")
+            delay_secs = None
+
+    if delay_secs is None and query:
+        delay_secs = _parse_delay_seconds(query)
+        message = _parse_message(query) or message
 
     if delay_secs is None:
         return (

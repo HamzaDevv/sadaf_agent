@@ -10,6 +10,12 @@ from config import (
     PRIORITY_CHAT, PRIORITY_EXTRACTION, PRIORITY_AGENT, STT_MODEL,
     PROXY_SILENT_WAIT_THRESHOLD_S, CHAT_MODEL
 )
+from config import VERBOSE_LOGS
+
+def _log_verbose(*args, **kwargs):
+    if VERBOSE_LOGS:
+        import builtins
+        builtins.print(*args, **kwargs)
 
 def _parse_reset_duration(value: str) -> float:
     if not value:
@@ -42,14 +48,14 @@ class GroqKeyState(BaseKeyState):
         now = time.monotonic()
         if now < self.locked_until:
             return False
-            
+
         rem_req = self.remaining_requests_8b if is_small_model(model) else self.remaining_requests_70b
         if rem_req <= 1:
             if now < self.reset_requests_at:
                 return False
-                
+
         remaining = self.remaining_tokens_8b if is_small_model(model) else self.remaining_tokens_70b
-        if remaining <= 100:  
+        if remaining <= 100:
             if now < self.reset_tokens_at:
                 return False
         return True
@@ -85,7 +91,7 @@ class GroqKeyState(BaseKeyState):
                     headers["x-ratelimit-reset-requests"]
                 )
         except Exception as e:
-            print(f"[GroqProxy] Header parse error: {e}")
+            _log_verbose(f"[GroqProxy] Header parse error: {e}")
 
     def decrement_rpm(self, model: str):
         if is_small_model(model):
@@ -102,8 +108,8 @@ class GroqProxyImpl(BaseLLMProxy):
         self.keys: List[GroqKeyState] = [GroqKeyState(k) for k in keys]
         self._rr_index: int = 0
         self._lock = asyncio.Lock()
-        
-        # We assume `self.router` will be set dynamically or we can import if needed, 
+
+        # We assume `self.router` will be set dynamically or we can import if needed,
         # but right now we handle `chat` and `stream` which need a router. We'll use a simple mock if none exists.
         # Ideally, `Router` shouldn't be inside the proxy, but we maintain backward compatibility.
         # Lazy loading to prevent circular import
@@ -141,13 +147,24 @@ class GroqProxyImpl(BaseLLMProxy):
         # The real usage is refunded after the response arrives.
         return int(prompt_chars / 4) + min(max_tokens, 1500)
 
-    async def call(self, model: str, messages: list[dict], priority: int = PRIORITY_EXTRACTION, temperature: float = 0.1, max_tokens: int = 4000, response_format: Optional[dict] = None, allow_fallback: bool = True) -> Optional[str]:
+    async def call(
+        self,
+        model: str,
+        messages: list[dict],
+        priority: int = PRIORITY_EXTRACTION,
+        temperature: float = 0.1,
+        max_tokens: int = 4000,
+        response_format: Optional[dict] = None,
+        allow_fallback: bool = True,
+        tools: Optional[List[Dict[str, Any]]] = None,
+        timeout: Optional[float] = None,
+    ) -> Optional[Any]:
         estimated = self._estimate_tokens(messages, max_tokens)
         bucket = self._bucket_for(model)
         wait_s = await bucket.consume(estimated)
 
         if wait_s >= PROXY_SILENT_WAIT_THRESHOLD_S:
-            print(f"[GroqProxy] Pacing wait {wait_s:.1f}s for {model}")
+            _log_verbose(f"[GroqProxy] Pacing wait {wait_s:.1f}s for {model}")
 
         attempts = 0
         last_err = None
@@ -156,7 +173,7 @@ class GroqProxyImpl(BaseLLMProxy):
             key_state = self._select_key(model)
             if not key_state:
                 wait = 60.0
-                print(f"[GroqProxy] All keys exhausted for {model}. Waiting {wait}s...")
+                _log_verbose(f"[GroqProxy] All keys exhausted for {model}. Waiting {wait}s...")
                 await asyncio.sleep(wait)
                 for k in self.keys:
                     k.reset_estimates()
@@ -167,11 +184,15 @@ class GroqProxyImpl(BaseLLMProxy):
             kwargs = dict(model=model, messages=messages, temperature=temperature, max_tokens=max_tokens)
             if response_format:
                 kwargs["response_format"] = response_format
+            if tools:
+                kwargs["tools"] = tools
+            if timeout is not None:
+                kwargs["timeout"] = timeout
 
             try:
                 response = await key_state.client.chat.completions.create(**kwargs)
                 try:
-                    headers = response._raw_response.headers  
+                    headers = response._raw_response.headers
                     headers_dict = dict(headers)
                     key_state.update_from_headers(headers_dict, model)
                     if "x-ratelimit-remaining-tokens" in headers_dict:
@@ -180,7 +201,11 @@ class GroqProxyImpl(BaseLLMProxy):
                 except Exception:
                     pass
 
-                text = response.choices[0].message.content or ""
+                message = response.choices[0].message
+                if hasattr(message, "tool_calls") and message.tool_calls:
+                    return message
+
+                text = message.content or ""
                 text = text.strip()
                 if response_format and response_format.get("type") == "json_object":
                     match = re.search(r'\{.*\}', text, re.DOTALL)
@@ -224,22 +249,22 @@ class GroqProxyImpl(BaseLLMProxy):
 
                     if retry_after > 60 and "70b" in model:
                         if allow_fallback:
-                            print(f"[GroqProxy] High wait ({retry_after}s) for {model}. Smart fallback to 8b.")
+                            _log_verbose(f"[GroqProxy] High wait ({retry_after}s) for {model}. Smart fallback to 8b.")
                             model = CHAT_MODEL
                             bucket = self._bucket_for(model)
-                            continue  
+                            continue
                         else:
-                            print(f"[GroqProxy] High wait ({retry_after}s) for {model}. No fallback (critical call).")
+                            _log_verbose(f"[GroqProxy] High wait ({retry_after}s) for {model}. No fallback (critical call).")
                             return f"RATE_LIMIT: {err}"
 
                     key_state.lock(retry_after)
-                    print(f"[GroqProxy] 429 on key ...{key_state.key[-6:]}. Trying next key.")
+                    _log_verbose(f"[GroqProxy] 429 on key ...{key_state.key[-6:]}. Trying next key.")
                     continue
 
-                print(f"[GroqProxy] LLM error (attempt {attempts}): {e}")
+                _log_verbose(f"[GroqProxy] LLM error (attempt {attempts}): {e}")
                 break
 
-        print(f"[GroqProxy] All attempts failed: {last_err}")
+        _log_verbose(f"[GroqProxy] All attempts failed: {last_err}")
         if last_err and ("429" in last_err or "rate_limit" in last_err.lower() or "too many requests" in last_err.lower()):
             return f"RATE_LIMIT: {last_err}"
         return None
@@ -259,7 +284,7 @@ class GroqProxyImpl(BaseLLMProxy):
         bucket = self._bucket_for(model)
         wait_s = await bucket.consume(estimated)
         if wait_s >= PROXY_SILENT_WAIT_THRESHOLD_S:
-            print(f"[GroqProxy] Stream pacing wait {wait_s:.1f}s for {model}")
+            _log_verbose(f"[GroqProxy] Stream pacing wait {wait_s:.1f}s for {model}")
 
         attempts = 0
         while attempts < min(3, len(self.keys) + 1):
@@ -316,7 +341,7 @@ class GroqProxyImpl(BaseLLMProxy):
                             yield clause
 
                 try:
-                    headers = stream._raw_response.headers  
+                    headers = stream._raw_response.headers
                     headers_dict = dict(headers)
                     key_state.update_from_headers(headers_dict, model)
                     if "x-ratelimit-remaining-tokens" in headers_dict:
@@ -325,7 +350,7 @@ class GroqProxyImpl(BaseLLMProxy):
                 except Exception:
                     pass
 
-                return  
+                return
 
             except Exception as e:
                 err = str(e)
@@ -376,10 +401,10 @@ class GroqProxyImpl(BaseLLMProxy):
                     else:
                         key_state.remaining_requests_70b = min(GROQ_RPM, key_state.remaining_requests_70b + 1)
                     continue
-                print(f"[GroqProxy] STT error: {e}")
+                _log_verbose(f"[GroqProxy] STT error: {e}")
                 return None
 
-        print("[GroqProxy] All STT attempts failed.")
+        _log_verbose("[GroqProxy] All STT attempts failed.")
         return None
 
     async def close(self):

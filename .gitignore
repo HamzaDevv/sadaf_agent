@@ -33,3 +33,5 @@ tests/temp_data/
 
 # Stress test logs
 tests/test_workflows/*.txt
+
+code_context.txt

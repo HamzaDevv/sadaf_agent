@@ -42,9 +42,14 @@ _VISION_PATTERNS = re.compile(
     re.IGNORECASE,
 )
 
-# Level-0 fast-path: exit / pause are so distinctive that STT rarely corrupts
+_DISMISS_PATTERNS = re.compile(
+    r"\b(nothing|nevermind|never mind|forget it|skip it|cancel that|ignore that)\b",
+    re.IGNORECASE,
+)
+
+# Level-0 fast-path: exit / pause / dismiss are so distinctive that STT rarely corrupts
 # them, and we never need LLM cleanup. Short-circuit immediately.
-_FAST_PATH_INTENTS = {"exit", "pause"}
+_FAST_PATH_INTENTS = {"exit", "pause", "dismiss"}
 
 
 def _regex_classify(text: str) -> str | None:
@@ -57,6 +62,8 @@ def _regex_classify(text: str) -> str | None:
         return "exit"
     if _PAUSE_PATTERNS.search(t):
         return "pause"
+    if _DISMISS_PATTERNS.search(t):
+        return "dismiss"
     if _VISION_PATTERNS.search(t):
         return "vision_query"
     return None  # LLM decides
@@ -79,6 +86,7 @@ Tasks:
 2. "intent": Confirm or correct the hint intent. Choose strictly from:
    - "exit"       : user explicitly ending interaction ("bye", "goodbye", "quit")
    - "pause"      : user wants Sadaf to hold on ("wait", "hold on", "one sec")
+   - "dismiss"    : user cancels current topic ("nevermind", "nothing", "forget it")
    - "vision_query": user wants camera ("what am I holding", "look at this")
    - "converse"   : everything else — questions, commands, conversation
 
@@ -129,7 +137,7 @@ async def analyze_input(raw_text: str) -> dict:
             ],
             priority=PRIORITY_AGENT,
             temperature=0.0,
-            max_tokens=150,
+            max_tokens=1000,
             response_format={"type": "json_object"},
         )
 
@@ -148,7 +156,7 @@ async def analyze_input(raw_text: str) -> dict:
         emotion = result.get("emotion", "neutral").lower()
 
         # Sanity-check intent value
-        valid_intents = {"exit", "pause", "vision_query", "converse"}
+        valid_intents = {"exit", "pause", "dismiss", "vision_query", "converse"}
         if intent not in valid_intents:
             intent = hint or "converse"
 

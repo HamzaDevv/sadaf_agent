@@ -16,7 +16,7 @@ from llm_proxy import llm_proxy
 
 TRAVERSAL_PROMPT = """\
 You are a cognitive memory graph traversal agent.
-We have found some highly activated memory nodes based on the user's query and 
+We have found some highly activated memory nodes based on the user's query and
 spreading activation through their memory graph.
 
 USER QUERY: {query}
@@ -24,7 +24,7 @@ USER QUERY: {query}
 TOP ACTIVATED SUBGRAPH:
 {subgraph}
 
-Your job is to prune this context. Output ONLY a JSON array of the node IDs 
+Your job is to prune this context. Output ONLY a JSON array of the node IDs
 that are highly relevant to answering the user's query. If none are relevant, output [].
 Example: ["career:company", "identity:name"]
 """
@@ -60,7 +60,7 @@ class MemoryAgent:
         # 2. Identity Context
         all_nodes_dict = self.store.get_all_nodes(user_id)
         identity_nodes = {nid: n for nid, n in all_nodes_dict.items() if n.get("section") == "identity"}
-        
+
         identity_context = "Identity Context:\n"
         if identity_nodes:
             identity_context += "\n".join([f"- {n['key']}: {n['value']}" for n in identity_nodes.values()])
@@ -88,78 +88,78 @@ class MemoryAgent:
         return "\n\n".join([s for s in sections if s.strip()]).strip()
 
     async def _spreading_activation(self, user_id: str, query: str, all_nodes: dict) -> str:
-        if not query:
+        if not query or not all_nodes:
             return ""
 
-        # Step 1: Seed Activation
-        seeds = set()
-        
-        # Keyword matches
+        # Reciprocal Rank Fusion (RRF) lists
+        # List 1: Vector Search Ranks
+        vector_seeds = self.store.vector_search(user_id, query, top_k=15)
+
+        # List 2: Keyword Match Ranks
+        keyword_seeds = []
         query_words = set(query.lower().split())
         for nid, n in all_nodes.items():
             content = f"{n.get('section', '')} {n.get('key', '')} {n.get('value', '')}".lower()
-            if any(word in content for word in query_words if len(word) > 3):
-                seeds.add(nid)
-                
-        # Vector search
-        vector_seeds = self.store.vector_search(user_id, query, top_k=5)
-        for vs in vector_seeds:
-            if vs in all_nodes:
-                seeds.add(vs)
-                
-        if not seeds:
-            return ""
+            overlap = sum(1 for w in query_words if len(w) > 3 and w in content)
+            if overlap > 0:
+                keyword_seeds.append((nid, overlap))
+        keyword_seeds.sort(key=lambda x: x[1], reverse=True)
+        keyword_rank_ids = [k[0] for k in keyword_seeds]
 
-        # Step 2: Graph Spreading Heuristic
-        # Fetch edges
+        # List 3: Graph Spreading Activation
+        initial_seeds = set(vector_seeds[:5] + keyword_rank_ids[:5])
+        activation = {nid: 0.0 for nid in all_nodes.keys()}
+        for seed in initial_seeds:
+            if seed in all_nodes:
+                activation[seed] = 10.0 * all_nodes[seed].get("stability", 1.0)
+
         data = self.store._load_json(self.store._graph_path(user_id), {"edges": []})
         edges = data.get("edges", [])
-        
         adjacency = {}
         for edge in edges:
-            fn = edge["from_node"]
-            tn = edge["to_node"]
-            w = edge.get("weight", 1.0)
+            fn, tn, w = edge["from_node"], edge["to_node"], edge.get("weight", 1.0)
             if fn not in adjacency: adjacency[fn] = []
             if tn not in adjacency: adjacency[tn] = []
             adjacency[fn].append((tn, w))
-            adjacency[tn].append((fn, w)) # Assume undirected for spread
+            adjacency[tn].append((fn, w))
 
-        activation = {nid: 0.0 for nid in all_nodes.keys()}
-        
-        # Initial energy for seeds
-        for seed in seeds:
-            node_stab = all_nodes[seed].get("stability", 1.0)
-            activation[seed] = 10.0 * node_stab
-
-        # Spread 1 hop
-        for seed in seeds:
-            if seed in adjacency:
+        for seed in initial_seeds:
+            if seed in adjacency and seed in all_nodes:
                 for neighbor, weight in adjacency[seed]:
                     if neighbor in all_nodes:
                         n_stab = all_nodes[neighbor].get("stability", 1.0)
-                        spread_energy = (activation[seed] * 0.5) * weight * n_stab
-                        activation[neighbor] += spread_energy
+                        activation[neighbor] += (activation[seed] * 0.5) * weight * n_stab
 
-        # Step 3: Top-K Pruning (Heuristic)
-        # Sort by activation
-        sorted_nodes = sorted(activation.items(), key=lambda x: x[1], reverse=True)
-        top_k = [nid for nid, energy in sorted_nodes if energy > 0.0][:10] # Top 10
+        sorted_spread = sorted(activation.items(), key=lambda x: x[1], reverse=True)
+        spread_rank_ids = [s[0] for s in sorted_spread if s[1] > 0.0]
 
-        if not top_k:
+        # Combine with RRF: score(d) = sum(1 / (k + rank))
+        rrf_k = 60
+        rrf_scores = {}
+        for rank_list in [vector_seeds, keyword_rank_ids, spread_rank_ids]:
+            for rank, nid in enumerate(rank_list):
+                if nid in all_nodes:
+                    rrf_scores[nid] = rrf_scores.get(nid, 0.0) + (1.0 / (rrf_k + rank + 1))
+
+        if not rrf_scores:
             return ""
+
+        sorted_rrf = sorted(rrf_scores.items(), key=lambda x: x[1], reverse=True)
+
+        # Adjust capacity: for high-context models, retrieve top 35 nodes; otherwise top 15
+        from config import AI_PROVIDER
+        max_subgraph_size = 35 if AI_PROVIDER in ("deepseek", "gemini") else 15
+        top_k = [nid for nid, _ in sorted_rrf[:max_subgraph_size]]
 
         subgraph = self.store.get_subgraph(user_id, top_k)
 
-        # Step 4: LLM Final Pruning
-        # Skip if subgraph is already tiny (≤ 3 nodes) — not worth the LLM call.
-        if len(top_k) <= 3:
-            print(f"[MemoryAgent] Skipping LLM pruning (only {len(top_k)} nodes activated)")
+        # Step 4: LLM Final Pruning (only if subgraph exceeds high threshold)
+        if len(top_k) <= 25:
+            print(f"[MemoryAgent] Utilizing full RRF subgraph ({len(top_k)} nodes active)")
             final_nodes = top_k
         else:
             subgraph_str = json.dumps(subgraph, indent=2)
             prompt = TRAVERSAL_PROMPT.format(query=query, subgraph=subgraph_str)
-
             final_nodes = top_k
             try:
                 raw = await llm_proxy.call(
@@ -167,7 +167,7 @@ class MemoryAgent:
                     messages=[{"role": "user", "content": prompt}],
                     priority=PRIORITY_AGENT,
                     temperature=0.0,
-                    max_tokens=150,
+                    max_tokens=250,
                 )
                 if raw:
                     try:
@@ -185,16 +185,19 @@ class MemoryAgent:
         # Assemble final context
         if not final_nodes:
             return ""
-            
+
         final_subgraph = self.store.get_subgraph(user_id, final_nodes)
-        
+
         context = "Relevant Memory Subgraph:\n"
         for nid, n in final_subgraph["nodes"].items():
-            context += f"- {nid} ({n['value']})\n"
-            
+            key = n.get('key', nid)
+            val = n.get('value', '')
+            conf = n.get('confidence', 1.0)
+            context += f"- {key}: {val} (confidence: {conf:.2f})\n"
+
         if final_subgraph["edges"]:
             context += "Relationships:\n"
             for edge in final_subgraph["edges"]:
                 context += f"- {edge['from_node']} [{edge['relation']}] -> {edge['to_node']}\n"
-                
+
         return context

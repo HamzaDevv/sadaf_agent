@@ -14,6 +14,13 @@ from datetime import datetime
 from typing import List, Dict, Any, Set, Tuple, Optional
 from pathlib import Path
 from config import MEMORY_DIR
+from config import VERBOSE_LOGS
+
+def _log_verbose(*args, **kwargs):
+    if VERBOSE_LOGS:
+        import builtins
+        builtins.print(*args, **kwargs)
+
 
 import chromadb
 from chromadb.config import Settings
@@ -31,7 +38,7 @@ class GeminiEmbeddingFunction(EmbeddingFunction):
     def __init__(self):
         api_key = os.environ.get("GOOGLE_API_KEY")
         if not api_key:
-            print("[GraphStore] WARNING: GOOGLE_API_KEY not found. Embeddings will fail.")
+            _log_verbose("[GraphStore] WARNING: GOOGLE_API_KEY not found. Embeddings will fail.")
         self._client = genai.Client(api_key=api_key)
         self.model = 'models/gemini-embedding-2'
 
@@ -89,7 +96,7 @@ class MemoryGraphStore:
     def ensure_user_dir(self, user_id: str):
         user_dir = self._user_dir(user_id)
         user_dir.mkdir(parents=True, exist_ok=True)
-        
+
         graph_path = self._graph_path(user_id)
         if not graph_path.exists():
             empty_graph = {
@@ -99,11 +106,11 @@ class MemoryGraphStore:
                 "sessions": []
             }
             graph_path.write_text(json.dumps(empty_graph, indent=2), encoding="utf-8")
-            
+
         archive_path = self._archive_path(user_id)
         if not archive_path.exists():
             archive_path.write_text(json.dumps({"nodes": {}}, indent=2), encoding="utf-8")
-            
+
         episodes_path = self._episodes_path(user_id)
         if not episodes_path.exists():
             episodes_path.write_text(json.dumps({"episodes": []}, indent=2), encoding="utf-8")
@@ -119,7 +126,7 @@ class MemoryGraphStore:
                     data[k] = v
             return data
         except Exception as e:
-            print(f"[GraphStore] Error loading {path}: {e}")
+            _log_verbose(f"[GraphStore] Error loading {path}: {e}")
             return default
 
     def _save_json(self, path: Path, data: Dict):
@@ -132,11 +139,11 @@ class MemoryGraphStore:
                     if isinstance(obj, datetime):
                         return obj.isoformat()
                     return super().default(obj)
-                    
+
             tmp.write_text(json.dumps(data, indent=2, cls=DateTimeEncoder), encoding="utf-8")
             tmp.rename(path)
         except Exception as e:
-            print(f"[GraphStore] Error saving {path}: {e}")
+            _log_verbose(f"[GraphStore] Error saving {path}: {e}")
 
     # --- EPISODIC MEMORY ---
     def append_episode(self, user_id: str, episode: EpisodicEvent):
@@ -154,7 +161,7 @@ class MemoryGraphStore:
         delta_t = (now - node.last_accessed).total_seconds() / 86400.0 # in days
         if delta_t < 0:
             delta_t = 0
-            
+
         weight = node.salience * math.exp(-delta_t / (tau * max(1.0, node.stability)))
         return weight
 
@@ -162,41 +169,41 @@ class MemoryGraphStore:
         """Check all nodes for decay, archive those below threshold."""
         threshold = 0.15
         to_archive = []
-        
+
         for nid, node_dict in data["nodes"].items():
             # Convert to model to safely access defaults if missing
             try:
                 node = MemoryNode(**node_dict)
             except Exception:
                 continue
-                
+
             weight = self._evaluate_decay(node)
             if weight < threshold and node.status != "archived":
                 to_archive.append((nid, node))
-                
+
         if to_archive:
             archive_data = self._load_json(self._archive_path(user_id), {"nodes": {}})
             for nid, node in to_archive:
                 node.status = "archived"
                 archive_data["nodes"][nid] = node.model_dump()
                 del data["nodes"][nid]
-                
+
                 # Remove from Chroma
                 try:
                     self.collection.delete(ids=[f"{user_id}::{nid}"])
                 except:
                     pass
-                print(f"[GraphStore] Archived decayed node: {nid}")
-                
+                _log_verbose(f"[GraphStore] Archived decayed node: {nid}")
+
             self._save_json(self._archive_path(user_id), archive_data)
-            
+
             # Clean up edges
             archived_ids = set(nid for nid, _ in to_archive)
             data["edges"] = [
                 e for e in data.get("edges", [])
                 if e["from_node"] not in archived_ids and e["to_node"] not in archived_ids
             ]
-            
+
         return data
 
     def _sync_to_chroma(self, user_id: str, node: MemoryNode):
@@ -204,7 +211,7 @@ class MemoryGraphStore:
         doc_id = f"{user_id}::{node.node_id}"
         content = f"{node.section} {node.key} {node.value}"
         metadata = {"user_id": user_id, "node_id": node.node_id, "section": node.section}
-        
+
         self.collection.upsert(
             documents=[content],
             metadatas=[metadata],
@@ -215,7 +222,7 @@ class MemoryGraphStore:
     def upsert_node(self, user_id: str, node_data: MemoryNode):
         data = self._load_json(self._graph_path(user_id), {"user_id": user_id, "nodes": {}, "edges": [], "sessions": []})
         data = self._lazy_prune(user_id, data)
-        
+
         node_id = node_data.node_id
         if node_id in data["nodes"]:
             # Update existing
@@ -230,10 +237,10 @@ class MemoryGraphStore:
             # Stability boost formula: slow logarithmic growth
             existing.stability += 0.1
             node_data = existing
-            print(f"[GraphStore] Updated node: {node_id} = {node_data.value} (Stability: {node_data.stability:.2f})")
+            _log_verbose(f"[GraphStore] Updated node: {node_id} = {node_data.value} (Stability: {node_data.stability:.2f})")
         else:
-            print(f"[GraphStore] Added node: {node_id} = {node_data.value}")
-            
+            _log_verbose(f"[GraphStore] Added node: {node_id} = {node_data.value}")
+
         data["nodes"][node_id] = node_data.model_dump()
         self._sync_to_chroma(user_id, node_data)
         self._save_json(self._graph_path(user_id), data)
@@ -254,10 +261,10 @@ class MemoryGraphStore:
     def add_edge(self, user_id: str, from_node: str, to_node: str, relation: str, weight: float = 1.0):
         data = self._load_json(self._graph_path(user_id), {"nodes": {}, "edges": []})
         data = self._lazy_prune(user_id, data)
-        
+
         if from_node not in data["nodes"] or to_node not in data["nodes"]:
             return
-            
+
         # Check if exists
         for edge in data["edges"]:
             if edge["from_node"] == from_node and edge["to_node"] == to_node and edge["relation"] == relation:
@@ -265,7 +272,7 @@ class MemoryGraphStore:
                 edge["last_reinforced"] = datetime.now()
                 self._save_json(self._graph_path(user_id), data)
                 return
-                
+
         new_edge = MemoryEdge(
             from_node=from_node,
             to_node=to_node,
@@ -273,7 +280,7 @@ class MemoryGraphStore:
             weight=weight
         )
         data["edges"].append(new_edge.model_dump())
-        print(f"[GraphStore] Added edge: {from_node} -[{relation}]-> {to_node}")
+        _log_verbose(f"[GraphStore] Added edge: {from_node} -[{relation}]-> {to_node}")
         self._save_json(self._graph_path(user_id), data)
 
     def get_all_nodes(self, user_id: str) -> Dict[str, Any]:
@@ -301,9 +308,9 @@ class MemoryGraphStore:
             if results and results["metadatas"] and results["metadatas"][0]:
                 return [m["node_id"] for m in results["metadatas"][0]]
         except Exception as e:
-            print(f"[GraphStore] Vector search error: {e}")
+            _log_verbose(f"[GraphStore] Vector search error: {e}")
         return []
-        
+
     def get_subgraph(self, user_id: str, node_ids: List[str]) -> Dict[str, Any]:
         data = self._load_json(self._graph_path(user_id), {"nodes": {}, "edges": []})
         nodes = {nid: data["nodes"][nid] for nid in node_ids if nid in data["nodes"]}
@@ -328,7 +335,7 @@ class MemoryGraphStore:
         sessions = data.get("sessions", [])
         if not sessions: return ""
         return "# Recent Sessions\n" + "\n".join(f"- {s}" for s in sessions[-n:])
-        
+
     def increment_conversation_count(self, user_id: str):
         data = self._load_json(self._graph_path(user_id), {"total_conversations": 0})
         data["total_conversations"] = data.get("total_conversations", 0) + 1
@@ -339,47 +346,47 @@ class MemoryGraphStore:
         try:
             from pyvis.network import Network
         except ImportError:
-            print("[GraphStore] pyvis not installed.")
+            _log_verbose("[GraphStore] pyvis not installed.")
             return
 
         data = self._load_json(self._graph_path(user_id), {"nodes": {}, "edges": []})
         if not data["nodes"]: return
 
         net = Network(height="750px", width="100%", bgcolor="#222222", font_color="white", directed=True)
-        
+
         for node_id, node_dict in data["nodes"].items():
             try:
                 node = MemoryNode(**node_dict)
                 weight = self._evaluate_decay(node)
-                
+
                 label = f"{node.key}\n{node.value}"
                 # Cognitive sizing: larger if high stability & salience
                 size = max(10, 20 * (node.stability * node.salience))
-                
+
                 title = (f"Section: {node.section}\n"
                          f"Stability: {node.stability:.2f}\n"
                          f"Salience: {node.salience:.2f}\n"
                          f"Weight: {weight:.2f}\n"
                          f"Status: {node.status}")
-                
+
                 color = None
                 borderWidth = 1
                 borderWidthSelected = 2
-                
+
                 # Dim color if low confidence
                 if node.confidence < 0.5:
                     color = {"background": "#555555", "border": "#333333"}
-                
+
                 # Dashed borders for provisional
                 shapeProperties = {}
                 if node.status == "provisional":
                     shapeProperties = {"borderDashes": [5, 5]}
                     borderWidth = 3
-                    
+
                 net.add_node(
-                    node_id, 
-                    label=label, 
-                    title=title, 
+                    node_id,
+                    label=label,
+                    title=title,
                     group=node.section,
                     size=size,
                     color=color,
@@ -387,14 +394,14 @@ class MemoryGraphStore:
                     shapeProperties=shapeProperties
                 )
             except Exception as e:
-                print(f"Skipping visualization for node {node_id}: {e}")
-            
+                _log_verbose(f"Skipping visualization for node {node_id}: {e}")
+
         for edge in data.get("edges", []):
             try:
                 net.add_edge(edge["from_node"], edge["to_node"], title=edge["relation"], label=edge["relation"])
             except:
                 pass
-            
+
         out_path = self._user_dir(user_id) / "graph_viz.html"
         net.save_graph(str(out_path))
-        print(f"[GraphStore] Saved visualization to {out_path}")
+        _log_verbose(f"[GraphStore] Saved visualization to {out_path}")

@@ -21,6 +21,7 @@ CRITICAL RULES FOR VOICE OUTPUT:
 6. Convey the Boss's direct response or data DIRECTLY to the user with your personality. Do NOT turn it into a third-person commentary or summary!
 7. NEVER invent, add, or mention capabilities, tools, or facts that are NOT explicitly present in the content you are given. If the content lists specific tools, mention ONLY those exact ones.
 8. If the content is answering a specific question, make sure your spoken output DIRECTLY answers that question FIRST, then optionally add personality.
+9. NEVER project emotions onto the user. Do not assume they feel frustrated, sad, or happy unless they explicitly say so. Mirror their actual tone instead.
 """
 
     async def speak(self, content: str, user_name: str = "User", emotion: str = "neutral") -> str:
@@ -47,12 +48,12 @@ Speak directly to the user:"""
                 temperature=0.6,
                 max_tokens=150
             )
-            
+
             # Clean up the output for TTS
             clean_text = strip_think_tags(raw or "I'm not sure what to say to that.")
             clean_text = strip_markdown(clean_text)
             return clean_text
-            
+
         except Exception as e:
             print(f"[SpeakerAgent] Error: {e}")
             return "Sorry, I lost my train of thought."

@@ -22,3 +22,4 @@ pyvis
 networkx
 chromadb
 google-genai>=1.19,<3
+openai

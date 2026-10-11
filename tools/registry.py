@@ -3,8 +3,8 @@ tools/registry.py — Sadaf Jarvis Tool Registry
 
 Defines the available tools and their metadata.
 """
-from dataclasses import dataclass
-from typing import Callable
+from dataclasses import dataclass, field
+from typing import Callable, Dict, Any
 
 # ── Tool imports ─────────────────────────────────────────────────────────────
 from tools.web_search import web_search
@@ -28,6 +28,7 @@ class ToolEntry:
     name: str
     description: str
     tool_fn: Callable
+    parameters: Dict[str, Any] = field(default_factory=lambda: {"type": "object", "properties": {}, "required": []})
     announcement: str = ""
     is_async: bool = True
     needs_speak_fn: bool = False
@@ -59,6 +60,14 @@ TOOL_REGISTRY: list[ToolEntry] = [
         name="set_reminder",
         description="Schedule a reminder (e.g. 'remind me in 10 minutes to drink water').",
         tool_fn=set_reminder,
+        parameters={
+            "type": "object",
+            "properties": {
+                "message": {"type": "string", "description": "What to remind the user about."},
+                "fire_at_iso": {"type": "string", "description": "ISO 8601 formatted datetime string when the reminder should fire."}
+            },
+            "required": ["message", "fire_at_iso"]
+        },
         announcement="Sure, let me set that reminder for you.",
         needs_speak_fn=True,
     ),
@@ -66,6 +75,14 @@ TOOL_REGISTRY: list[ToolEntry] = [
         name="set_timer",
         description="Set a countdown timer (e.g. 'set a timer for 5 minutes').",
         tool_fn=set_timer,
+        parameters={
+            "type": "object",
+            "properties": {
+                "duration_seconds": {"type": "integer", "description": "Timer duration in seconds."},
+                "label": {"type": "string", "description": "Optional label for the timer."}
+            },
+            "required": ["duration_seconds"]
+        },
         announcement="Starting your timer now.",
         needs_speak_fn=True,
     ),
@@ -81,6 +98,13 @@ TOOL_REGISTRY: list[ToolEntry] = [
         name="get_countdown",
         description="Calculate days remaining until an event or date (e.g. 'days until Friday', 'countdown to Christmas').",
         tool_fn=get_countdown,
+        parameters={
+            "type": "object",
+            "properties": {
+                "target": {"type": "string", "description": "The target date or event to countdown to."}
+            },
+            "required": ["target"]
+        },
         announcement="Let me check that for you.",
         needs_synthesis=True,
     ),
@@ -88,6 +112,13 @@ TOOL_REGISTRY: list[ToolEntry] = [
         name="calculate",
         description="Evaluate a mathematical expression (e.g. 'what is 15 percent of 50', '2 plus 2').",
         tool_fn=calculate,
+        parameters={
+            "type": "object",
+            "properties": {
+                "expression": {"type": "string", "description": "The mathematical expression to evaluate."}
+            },
+            "required": ["expression"]
+        },
         announcement="",
         is_async=False,
         needs_synthesis=True,
@@ -96,6 +127,13 @@ TOOL_REGISTRY: list[ToolEntry] = [
         name="get_system_info",
         description="Check battery level, CPU usage, RAM, or disk space.",
         tool_fn=get_system_info,
+        parameters={
+            "type": "object",
+            "properties": {
+                "metric": {"type": "string", "enum": ["battery", "cpu", "ram", "disk", "all"], "description": "The system metric to check."}
+            },
+            "required": ["metric"]
+        },
         announcement="Running a quick system scan.",
         consolidate_memory=False,
         needs_synthesis=True,
@@ -104,18 +142,41 @@ TOOL_REGISTRY: list[ToolEntry] = [
         name="control_volume",
         description="Mute, unmute, or change system volume level.",
         tool_fn=control_volume,
+        parameters={
+            "type": "object",
+            "properties": {
+                "action": {"type": "string", "enum": ["mute", "unmute", "up", "down", "set"]},
+                "level": {"type": "integer", "description": "Volume level (0-100) if action is 'set'."}
+            },
+            "required": ["action"]
+        },
         announcement="",
     ),
     ToolEntry(
         name="launch_app",
         description="Open a macOS application (e.g. 'open Spotify', 'launch Chrome').",
         tool_fn=launch_app,
+        parameters={
+            "type": "object",
+            "properties": {
+                "app_name": {"type": "string", "description": "Name of the application to launch."}
+            },
+            "required": ["app_name"]
+        },
         announcement="Opening that for you.",
     ),
     ToolEntry(
         name="clipboard_action",
         description="Read what is currently copied on the clipboard, or copy new text to it.",
         tool_fn=clipboard_action,
+        parameters={
+            "type": "object",
+            "properties": {
+                "action": {"type": "string", "enum": ["read", "write"]},
+                "text": {"type": "string", "description": "Text to write to the clipboard (if action is 'write')."}
+            },
+            "required": ["action"]
+        },
         announcement="Checking your clipboard.",
         consolidate_memory=False,
     ),
@@ -123,6 +184,12 @@ TOOL_REGISTRY: list[ToolEntry] = [
         name="take_screenshot",
         description="Take a screenshot of the computer screen and optionally analyze what is on it.",
         tool_fn=take_screenshot,
+        parameters={
+            "type": "object",
+            "properties": {
+                "analyze": {"type": "boolean", "description": "Whether to use vision AI to analyze the screenshot."}
+            }
+        },
         announcement="Taking a screenshot now.",
         consolidate_memory=False,
     ),
@@ -130,6 +197,13 @@ TOOL_REGISTRY: list[ToolEntry] = [
         name="camera_tool",
         description="Use the webcam to look at something, see what the user is holding, or identify an object in front of the camera.",
         tool_fn=_camera_with_privacy,
+        parameters={
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "The question or instruction for analyzing the camera feed."}
+            },
+            "required": ["query"]
+        },
         announcement="Let me take a look at that.",
         consolidate_memory=False,
         needs_synthesis=True,
@@ -138,6 +212,12 @@ TOOL_REGISTRY: list[ToolEntry] = [
         name="get_weather",
         description="Check current weather, temperature, or rain forecast.",
         tool_fn=get_weather,
+        parameters={
+            "type": "object",
+            "properties": {
+                "location": {"type": "string", "description": "City or location to get the weather for. If omitted, uses default location."}
+            }
+        },
         announcement="Let me check the weather for you.",
         consolidate_memory=False,
         needs_synthesis=True,
@@ -146,6 +226,12 @@ TOOL_REGISTRY: list[ToolEntry] = [
         name="get_news",
         description="Fetch latest news headlines, optionally by topic (e.g. 'tech news', 'cricket news').",
         tool_fn=get_news,
+        parameters={
+            "type": "object",
+            "properties": {
+                "topic": {"type": "string", "description": "Topic or query to search news for. Omit for general top headlines."}
+            }
+        },
         announcement="Let me pull up the latest news for you.",
         needs_context=True,
         consolidate_memory=False,
@@ -155,6 +241,13 @@ TOOL_REGISTRY: list[ToolEntry] = [
         name="web_search",
         description="Search the internet or google something to find facts, information, or answers to questions.",
         tool_fn=web_search,
+        parameters={
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "The search query to look up on the web."}
+            },
+            "required": ["query"]
+        },
         announcement="Let me check that online for you.",
         consolidate_memory=False,
         needs_synthesis=True,

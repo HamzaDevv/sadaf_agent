@@ -81,9 +81,22 @@ def _fetch_articles(query: str = None, max_results: int = 4) -> list[dict]:
                 "apikey": GNEWS_API_KEY,
             }
         resp = requests.get(url, params=params, timeout=8)
+        if resp.status_code != 200:
+            print(f"[NewsTool] HTTP Error {resp.status_code}: {resp.text}")
         return resp.json().get("articles", [])
-    except Exception:
+    except Exception as e:
+        print(f"[NewsTool] Exception in _fetch_articles: {e}")
         return []
+
+
+_CONVERSATIONAL_STOP_WORDS = {
+    "hello", "hi", "hey", "can", "could", "would", "please", "tell", "me", "give", "get", "find",
+    "what", "is", "are", "there", "any", "some", "the", "a", "an", "latest", "recent", "interesting",
+    "good", "bad", "today", "now", "happened", "happen", "news", "updates", "update", "this", "week",
+    "month", "show", "read", "know", "about", "for", "on", "regarding", "you", "your", "yours", "i",
+    "my", "we", "our"
+}
+
 
 
 def _extract_explicit_topic(query: str) -> str | None:
@@ -93,19 +106,32 @@ def _extract_explicit_topic(query: str) -> str | None:
          "tech news" → "technology"
          "news" → None
     """
-    q = query.lower().strip()
-    # Prepositions: "news about X", "news on X", "news regarding X", "X news"
-    for prep in ["about", "on", "regarding", "for"]:
-        if prep in q:
-            tail = q.split(prep, 1)[-1].strip()
-            if tail and len(tail) > 2:
-                return tail[:60]  # cap length
-    # "X news" pattern
-    m = re.match(r"^(.+?)\s+news\b", q)
-    if m:
-        candidate = m.group(1).strip()
-        if candidate and candidate not in ("the", "some", "latest", "recent"):
-            return candidate
+    if not query:
+        return None
+
+    q_lower = query.lower()
+
+    # 1. Look for explicit preposition patterns first: "news about cricket", "news regarding AI"
+    for prep in ["about", "regarding"]:
+        m = re.search(r"\b" + prep + r"\b\s+(.+)", q_lower)
+        if m:
+            raw_target = m.group(1)
+            clean_target = re.sub(r"[^\w\s]", " ", raw_target)
+            words = [w for w in clean_target.split() if w not in {"today", "now", "recently", "this", "week", "month"}]
+            if words:
+                topic = " ".join(words[:4]).strip()
+                if len(topic) >= 2:
+                    return topic
+
+    # 2. Look for specific non-conversational topic keywords before/around "news"
+    clean_q = re.sub(r"[^\w\s]", " ", q_lower)
+    words = [w for w in clean_q.split() if w not in _CONVERSATIONAL_STOP_WORDS]
+
+    if words:
+        topic = " ".join(words[:3]).strip()
+        if len(topic) >= 2:
+            return topic
+
     return None
 
 
@@ -196,7 +222,7 @@ async def get_news(query: str = "", memory_context: str = "", user_name: str = "
             messages=[{"role": "user", "content": prompt}],
             priority=PRIORITY_AGENT,
             temperature=0.7,
-            max_tokens=160,
+            max_tokens=500,
         )
         if narrated and len(narrated.strip()) > 10:
             return narrated.strip()

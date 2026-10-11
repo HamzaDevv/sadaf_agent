@@ -16,11 +16,11 @@ class GeminiKeyState(BaseKeyState):
     def __init__(self, key: str):
         super().__init__(key)
         self.client = AsyncOpenAI(
-            api_key=key, 
+            api_key=key,
             base_url="https://generativelanguage.googleapis.com/v1beta/openai/"
         )
         self.reset_estimates()
-        
+
     def reset_estimates(self):
         self.remaining_tokens_lite: int = GEMINI_TPM_LITE
         self.remaining_tokens_flash: int = GEMINI_TPM_FLASH
@@ -31,15 +31,15 @@ class GeminiKeyState(BaseKeyState):
         now = time.monotonic()
         if now < self.locked_until:
             return False
-            
+
         rem_req = self.remaining_requests_lite if is_small_model(model) else self.remaining_requests_flash
         if rem_req <= 1:
             return False
-                
+
         remaining = self.remaining_tokens_lite if is_small_model(model) else self.remaining_tokens_flash
-        if remaining <= 100:  
+        if remaining <= 100:
             return False
-            
+
         return True
 
     def available_tokens(self, model: str) -> int:
@@ -67,7 +67,7 @@ class GeminiProxyImpl(BaseLLMProxy):
         self.keys: List[GeminiKeyState] = [GeminiKeyState(k) for k in keys]
         self._rr_index: int = 0
         self._lock = asyncio.Lock()
-        
+
         self._router = None
 
         n = len(self.keys)
@@ -99,7 +99,18 @@ class GeminiProxyImpl(BaseLLMProxy):
         prompt_chars = sum(len(m.get("content", "")) for m in messages)
         return int(prompt_chars / 4) + max_tokens
 
-    async def call(self, model: str, messages: list[dict], priority: int = PRIORITY_EXTRACTION, temperature: float = 0.1, max_tokens: int = 4000, response_format: Optional[dict] = None, allow_fallback: bool = True) -> Optional[str]:
+    async def call(
+        self,
+        model: str,
+        messages: list[dict],
+        priority: int = PRIORITY_EXTRACTION,
+        temperature: float = 0.1,
+        max_tokens: int = 4000,
+        response_format: Optional[dict] = None,
+        allow_fallback: bool = True,
+        tools: Optional[List[Dict[str, Any]]] = None,
+        timeout: Optional[float] = None,
+    ) -> Optional[Any]:
         estimated = self._estimate_tokens(messages, max_tokens)
         bucket = self._bucket_for(model)
         wait_s = await bucket.consume(estimated)
@@ -131,11 +142,19 @@ class GeminiProxyImpl(BaseLLMProxy):
             kwargs = dict(model=model, messages=messages, temperature=temperature, max_tokens=max_tokens)
             if response_format:
                 kwargs["response_format"] = response_format
+            if tools:
+                kwargs["tools"] = tools
+            if timeout is not None:
+                kwargs["timeout"] = timeout
 
             try:
                 response = await key_state.client.chat.completions.create(**kwargs)
-                
-                text = response.choices[0].message.content or ""
+
+                message = response.choices[0].message
+                if hasattr(message, "tool_calls") and message.tool_calls:
+                    return message
+
+                text = message.content or ""
                 text = text.strip()
                 if response_format and response_format.get("type") == "json_object":
                     match = re.search(r'\{.*\}', text, re.DOTALL)
@@ -249,7 +268,7 @@ class GeminiProxyImpl(BaseLLMProxy):
                         clause = clause.strip()
                         if clause:
                             yield clause
-                return  
+                return
 
             except Exception as e:
                 err = str(e)
@@ -268,18 +287,13 @@ class GeminiProxyImpl(BaseLLMProxy):
         return result or ""
 
     async def transcribe(self, file_tuple: tuple, model: str = STT_MODEL, response_format: str = "text") -> Optional[str]:
-        # For Gemini, the old code used Groq API key for STT as a fallback. 
-        # So we can instantiate Groq specifically for transcribe if needed,
-        # or implement Gemini's audio transcription if available.
-        # But for stability, we replicate the old fallback:
-        
         from groq import AsyncGroq
         from config import GROQ_API_KEYS
-        
+
         if not GROQ_API_KEYS:
             print("[GeminiProxy] No GROQ_API_KEYS available for STT fallback.")
             return None
-            
+
         stt_client = AsyncGroq(api_key=GROQ_API_KEYS[0])
         try:
             result = await stt_client.audio.transcriptions.create(
@@ -291,3 +305,12 @@ class GeminiProxyImpl(BaseLLMProxy):
         except Exception as e:
             print(f"[GeminiProxy] Fallback STT error: {e}")
             return None
+
+    async def close(self):
+        """Close all underlying AsyncOpenAI HTTP clients cleanly."""
+        for key_state in self.keys:
+            try:
+                if hasattr(key_state.client, "close"):
+                    await key_state.client.close()
+            except Exception:
+                pass

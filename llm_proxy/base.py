@@ -107,7 +107,7 @@ class BaseKeyState(ABC):
     @abstractmethod
     def decrement_rpm(self, model: str):
         pass
-    
+
     @abstractmethod
     def reset_estimates(self):
         pass
@@ -122,7 +122,7 @@ class BaseLLMProxy(ABC):
     Abstract base class for LLM Proxies.
     Defines the contract for interacting with AI models in Sadaf.
     """
-    
+
     @abstractmethod
     async def call(
         self,
@@ -133,8 +133,10 @@ class BaseLLMProxy(ABC):
         max_tokens: int = 4000,
         response_format: Optional[Dict[str, Any]] = None,
         allow_fallback: bool = True,
-    ) -> Optional[str]:
-        """Non-streaming LLM call."""
+        tools: Optional[List[Dict[str, Any]]] = None,
+        timeout: Optional[float] = None,
+    ) -> Optional[Any]:
+        """Non-streaming LLM call (returns text content or message object if tool_calls present)."""
         pass
 
     @abstractmethod

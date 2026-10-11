@@ -103,31 +103,33 @@ def cancel_all_timers():
 
 # ── Main tool function ────────────────────────────────────────────────────────
 
-async def set_timer(query: str, speak_fn: Callable = None) -> str:
+async def set_timer(query: str = "", speak_fn: Callable = None, duration_seconds: int = 0, label: str = "") -> str:
     """Parse and start a countdown timer."""
     global _speak_fn
     if speak_fn:
         _speak_fn = speak_fn
 
-    duration_secs = _parse_duration(query)
+    # Fallback to regex if called from legacy orchestrator
+    if duration_seconds <= 0 and query:
+        duration_seconds = _parse_duration(query) or 0
 
-    if duration_secs is None or duration_secs <= 0:
+    if duration_seconds is None or duration_seconds <= 0:
         return "I couldn't figure out the timer duration. Try 'set a timer for 5 minutes'."
 
-    # Extract optional label (e.g. "timer for 5 minutes for the pasta")
-    label = ""
-    match = re.search(r"for\s+the\s+(.+)$", query.lower())
-    if match:
-        # Make sure it's not a time unit
-        candidate = match.group(1).strip()
-        if not any(unit in candidate for unit in TIME_UNITS_SECS):
-            label = candidate
+    # Extract optional label if not provided via kwargs
+    if not label and query:
+        match = re.search(r"for\s+the\s+(.+)$", query.lower())
+        if match:
+            # Make sure it's not a time unit
+            candidate = match.group(1).strip()
+            if not any(unit in candidate for unit in TIME_UNITS_SECS):
+                label = candidate
 
-    entry: dict = {"duration": duration_secs, "label": label, "done": False, "task": None}
+    entry: dict = {"duration": duration_seconds, "label": label, "done": False, "task": None}
     _active_timers.append(entry)
-    entry["task"] = asyncio.create_task(_run_timer(duration_secs, label, entry))
+    entry["task"] = asyncio.create_task(_run_timer(duration_seconds, label, entry))
 
-    human = _human_duration(duration_secs)
+    human = _human_duration(duration_seconds)
     if label:
         return f"Timer set for {human} — I'll let you know when the {label} is ready."
     return f"Timer set for {human}. I'll give you a heads up when it's done."
