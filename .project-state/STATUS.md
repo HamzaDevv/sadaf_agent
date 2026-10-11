@@ -91,8 +91,7 @@ the real legacy memory directory remains untouched.
 - Legacy memory reads may prune data. Protect real memory throughout development.
 - Checkout contains substantial earlier unfinished work; see `EXISTING_WORK.md`.
 - Milestone 1 commit: `b1eeb43bfa7b8cbbac99dba8bcb6164377d60085`.
-- Record the milestone 2 implementation commit hash in the handoff and session
-  log after the focused commit is created.
+- Milestone 2 commit: `fd5fa2672d62c2cbf79a48aa77fc5228408c98ff`.
 - Vector indexing, live extraction providers, and wiring the new store into the
   legacy voice/application loop remain future work; no live integrations were
   claimed.

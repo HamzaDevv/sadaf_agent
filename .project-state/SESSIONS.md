@@ -43,5 +43,5 @@ be explicitly noted in a later entry.
   path guard, SQLite backup, and idempotent fixture imports.
 - Verification: offline lock sync, compileall, doctor, fake text, and 66 tests
   passed. Synthetic fixtures only; live providers and real memories untouched.
-- Commit: pending until the focused milestone 2 commit is created.
+- Implementation commit: `fd5fa2672d62c2cbf79a48aa77fc5228408c98ff`.
 - Next: milestone 3 local project Markdown, policy authority, revisions, and isolation.

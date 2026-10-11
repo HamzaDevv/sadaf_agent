@@ -5,8 +5,8 @@ Updated: 2026-10-11 (Asia/Kolkata).
 ## Resume here
 
 Milestones 1 and 2 are complete. Milestone 1 implementation commit:
-`b1eeb43bfa7b8cbbac99dba8bcb6164377d60085`. Milestone 2 commit hash will be
-recorded here after its focused commit. Next implement milestone 3 using
+`b1eeb43bfa7b8cbbac99dba8bcb6164377d60085`. Milestone 2 implementation commit:
+`fd5fa2672d62c2cbf79a48aa77fc5228408c98ff`. Next implement milestone 3 using
 Session 3 in `../docs/IMPLEMENTATION_PROMPTS.md`. Do not repeat the architecture
 research.
 
