@@ -10,6 +10,7 @@ from sadaf.projects import (
     ContextError, LocalMarkdownSource, PolicyBlocked, ProjectContext,
     ProjectRegistry, RevisionConflict, initialize_project,
 )
+from sadaf.conversation import ProjectContextLoader
 
 
 class FakeSource:
@@ -101,6 +102,22 @@ def test_switch_preserves_original_snapshot_and_scope(projects):
         registry.get('other-user', 'alpha')
     with pytest.raises(ContextError):
         registry.active('other-user', 'thread')
+
+
+def test_conversation_project_loader_refreshes_original_policy_and_sections(projects):
+    registry, context, _, roots = projects
+    write(roots, 'alpha', 'ARCHITECTURE.md', '# Runtime\nAlpha dispatcher\n# Storage\nLocal fixture')
+    write(roots, 'beta', 'ARCHITECTURE.md', '# Runtime\nBeta dispatcher')
+    loader = ProjectContextLoader(registry, context, global_preferences={'tone':'brief'})
+    alpha = loader('user', 'thread-a', 'alpha', 'dispatcher')
+    beta = loader('user', 'thread-b', 'beta', 'dispatcher')
+    assert alpha.project_id == 'alpha' and beta.project_id == 'beta'
+    assert 'Alpha dispatcher' in repr(alpha) and 'Beta dispatcher' not in repr(alpha)
+    assert '# Binding project policies' in alpha.project_rules
+    assert any('POLICIES.md@' in source for source in alpha.sources)
+    write(roots, 'alpha', 'POLICIES.md', '# Policies\n- MUST malformed')
+    with pytest.raises(PolicyBlocked):
+        loader('user', 'thread-a', 'alpha', 'dispatcher')
 
 
 def test_authority_preferences_and_untrusted_injection(projects):

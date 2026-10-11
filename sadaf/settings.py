@@ -81,17 +81,18 @@ def load_settings(
         return values.get(name, default).strip()
 
     roles = {}
-    for role, allowed, default, model in (
-        ("reasoning", {"fake", "openrouter"}, "fake", "synthetic-reasoning"),
-        ("extraction", {"fake", "openrouter"}, "fake", "synthetic-extraction"),
-        ("voice", {"disabled", "fake", "openai"}, "disabled", ""),
-        ("embeddings", {"disabled", "fake", "google"}, "disabled", ""),
+    for role, allowed, default, model, openrouter_model in (
+        ("reasoning", {"fake", "openrouter"}, "fake", "synthetic-reasoning", "openai/gpt-6.1-sol"),
+        ("extraction", {"fake", "openrouter"}, "fake", "synthetic-extraction", "openai/gpt-6-luna"),
+        ("voice", {"disabled", "fake", "openai"}, "disabled", "", ""),
+        ("embeddings", {"disabled", "fake", "google"}, "disabled", "", ""),
     ):
         prefix = "SADAF_" + role.upper()
         provider = get(prefix + "_PROVIDER", default)
         if provider not in allowed:
             raise SettingsError(prefix + "_PROVIDER is unsupported")
-        selected_model = get(prefix + "_MODEL", model if provider == default else "")
+        selected_model = get(prefix + "_MODEL", model if provider == default else
+                             openrouter_model if provider == "openrouter" else "")
         if provider != "disabled" and not selected_model:
             raise SettingsError(prefix + "_MODEL is required for the selected provider")
         key = {"openrouter": "OPENROUTER_API_KEY", "openai": "OPENAI_API_KEY",

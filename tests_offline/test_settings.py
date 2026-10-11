@@ -63,9 +63,13 @@ def test_invalid_fields_have_safe_errors(tmp_path, field, value):
 ])
 def test_live_roles_validate_model_and_credential_separately(tmp_path, role, provider, key):
     values = {f"SADAF_{role}_PROVIDER": provider}
-    with pytest.raises(SettingsError, match=f"SADAF_{role}_MODEL"):
-        settings(tmp_path, **values)
-    values[f"SADAF_{role}_MODEL"] = "fixture/model"
+    if provider == "openrouter":
+        result = settings(tmp_path, **{**values, key:"fixture-secret"})
+        assert result.reasoning.model == "openai/gpt-6.1-sol" if role == "REASONING" else result.extraction.model == "openai/gpt-6-luna"
+    else:
+        with pytest.raises(SettingsError, match=f"SADAF_{role}_MODEL"):
+            settings(tmp_path, **values)
+        values[f"SADAF_{role}_MODEL"] = "fixture/model"
     with pytest.raises(SettingsError, match=key):
         settings(tmp_path, **values)
     values[key] = "fixture-secret"
