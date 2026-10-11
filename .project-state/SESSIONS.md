@@ -131,3 +131,32 @@ be explicitly noted in a later entry.
 - Implementation commit: `cf8ef41b5c7071546d2ad0cf31e77d4204152ab9`.
 - Next: milestone 6 voice transport and integrated offline evaluation, keeping
   microphone/provider evaluation opt-in and separately recorded.
+
+
+## 2026-10-11 — Milestone 6 voice and integrated offline evaluation
+
+- Read canonical state, Session 6, and revival plan; confirmed milestone 5
+  `cf8ef41b5c7071546d2ad0cf31e77d4204152ab9` exists. Preserved all four existing
+  untracked paths and local databases. No legacy memory was read/migrated and
+  `test_deepseek.py` was not run.
+- Added replaceable voice transport/controller, deterministic fake, macOS speech
+  fallback, transcript reconciliation/deduplication, durable generated/played
+  ledger, interruption/stop, context synchronization, reconnect, and shutdown.
+  Unheard speech stays excluded from completed history and summaries. Pausing
+  voice leaves coding tasks active; uncertain restart requests do not replay.
+- Added fresh scoped task context and rejected success-with-errors results.
+  Added opt-in candidate evaluation hook with recognition/latency/recovery/cost
+  observation fields and identical synthetic cases. Actual live adapters remain
+  pending; fake measurements are not live results.
+- Integrated fixture exercises memory correction, A/B switching/isolation,
+  full policy retention, concurrent fake M2 tasks, interrupted speech, restart,
+  original policy/task attribution, no duplicate submission, and evidence-based
+  success versus unverifiable failure.
+- Verification: 127 offline tests passed; compileall, locked offline sync,
+  doctor, fake text, offline wheel build, and focused whitespace check passed.
+  No provider/M2 request, microphone, actual audio process, or real memory use.
+- Checked official OpenAI client-delegation documentation. Direct OpenAI key is
+  absent; account access is unverified. No live evaluation or winner claimed.
+- Implementation commit: pending local commit for this session.
+- Next: supplied real M2 contract or consented Live/player adapter, contract
+  validation and explicit synthetic live evaluation, then application wiring.

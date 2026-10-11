@@ -180,6 +180,7 @@ class SQLiteConversationStore:
         self.db_path = str(database)
         with sqlite3.connect(self.db_path) as db:
             db.executescript("""
+              CREATE TABLE IF NOT EXISTS voice_delivery(user_id TEXT,thread_id TEXT,delivery_id TEXT,seq INTEGER,generated TEXT,played INTEGER NOT NULL DEFAULT 0,status TEXT NOT NULL DEFAULT 'pending',PRIMARY KEY(user_id,thread_id,delivery_id));
               CREATE TABLE IF NOT EXISTS threads(user_id TEXT,thread_id TEXT,project_id TEXT,summary TEXT NOT NULL DEFAULT '',commitments_json TEXT NOT NULL DEFAULT '[]',PRIMARY KEY(user_id,thread_id));
               CREATE TABLE IF NOT EXISTS conversation_turns(id INTEGER PRIMARY KEY,user_id TEXT,thread_id TEXT,project_id TEXT,seq INTEGER,speaker TEXT,text TEXT,UNIQUE(user_id,thread_id,seq));
             """)
@@ -201,6 +202,39 @@ class SQLiteConversationStore:
             seq = db.execute("SELECT COALESCE(MAX(seq),0) FROM conversation_turns WHERE user_id=? AND thread_id=?", (user_id, thread_id)).fetchone()[0]
             db.executemany("INSERT INTO conversation_turns(user_id,thread_id,project_id,seq,speaker,text) VALUES(?,?,?,?,?,?)", [(user_id,thread_id,project_id,seq+1,user.speaker,user.text),(user_id,thread_id,project_id,seq+2,assistant.speaker,assistant.text)])
             db.commit()
+
+    def append_voice(self, user_id: str, thread_id: str, project_id: str | None,
+                     user: Turn, assistant: Turn, delivery_id: str) -> None:
+        """Atomically save generated speech as unheard until player acknowledgment."""
+        with sqlite3.connect(self.db_path) as db:
+            db.execute("BEGIN IMMEDIATE")
+            db.execute("INSERT INTO threads(user_id,thread_id,project_id) VALUES(?,?,?) ON CONFLICT(user_id,thread_id) DO UPDATE SET project_id=excluded.project_id", (user_id,thread_id,project_id))
+            seq = db.execute("SELECT COALESCE(MAX(seq),0) FROM conversation_turns WHERE user_id=? AND thread_id=?", (user_id,thread_id)).fetchone()[0]
+            db.executemany("INSERT INTO conversation_turns(user_id,thread_id,project_id,seq,speaker,text) VALUES(?,?,?,?,?,?)", [(user_id,thread_id,project_id,seq+1,user.speaker,user.text),(user_id,thread_id,project_id,seq+2,"assistant","[Voice output unheard; playback unconfirmed.]")])
+            db.execute("INSERT INTO voice_delivery(user_id,thread_id,delivery_id,seq,generated) VALUES(?,?,?,?,?)", (user_id,thread_id,delivery_id,seq+2,assistant.text))
+
+    def delivery(self, user_id: str, thread_id: str, delivery_id: str) -> dict | None:
+        with sqlite3.connect(self.db_path) as db:
+            db.row_factory = sqlite3.Row
+            row = db.execute("SELECT * FROM voice_delivery WHERE user_id=? AND thread_id=? AND delivery_id=?", (user_id,thread_id,delivery_id)).fetchone()
+            return dict(row) if row else None
+
+    def acknowledge_playback(self, user_id: str, thread_id: str, delivery_id: str,
+                             played: int, *, stopped: bool = False) -> None:
+        with sqlite3.connect(self.db_path) as db:
+            db.execute("BEGIN IMMEDIATE")
+            row = db.execute("SELECT seq,generated,played,status FROM voice_delivery WHERE user_id=? AND thread_id=? AND delivery_id=?", (user_id,thread_id,delivery_id)).fetchone()
+            if row is None: raise ValueError("Unknown delivery")
+            seq, generated, previous, status = row
+            if not isinstance(played, int) or isinstance(played, bool) or not previous <= played <= len(generated):
+                raise ValueError("Playback must be a monotonic confirmed text prefix")
+            if status in ("stopped", "played"):
+                return  # Terminal delivery cannot be revived by late events.
+            status = "stopped" if stopped else "played" if played == len(generated) else "pending"
+            heard = generated[:played]
+            projected = heard if status == "played" else heard + "\n[Remaining voice output unheard; playback unconfirmed.]"
+            db.execute("UPDATE voice_delivery SET played=?,status=? WHERE user_id=? AND thread_id=? AND delivery_id=?", (played,status,user_id,thread_id,delivery_id))
+            db.execute("UPDATE conversation_turns SET text=? WHERE user_id=? AND thread_id=? AND seq=?", (projected,user_id,thread_id,seq))
 
     def save_summary(self, user_id: str, thread_id: str, summary: str) -> None:
         with sqlite3.connect(self.db_path) as db:
@@ -484,12 +518,14 @@ class ConversationResult:
 class ConversationBackend:
     def __init__(self, *, store: ConversationStore, provider: Provider, context_builder: ContextBuilder,
                  tool_runtime: ToolRuntime, context_loader: Callable[[str, str, str | None, str], ContextPacket] | None = None,
+                 task_state_loader: Callable[[str, str, str | None], Sequence[str]] | None = None,
                  memory_repository: Any | None = None, summarizer: Callable[[ThreadState], Any] | None = None,
                  summarize_after_turns: int = 40, summary_keep_recent: int = 20, max_tool_rounds: int = 3):
         if max_tool_rounds < 0 or max_tool_rounds > 8: raise ValueError("Invalid tool iteration bound")
         if summarize_after_turns < 4 or summary_keep_recent < 2 or summary_keep_recent % 2:
             raise ValueError("Summary limits must retain complete exchanges")
         self.store, self.provider, self.context_builder, self.tool_runtime = store, provider, context_builder, tool_runtime
+        self.task_state_loader = task_state_loader
         self.context_loader, self.memory_repository, self.summarizer = context_loader, memory_repository, summarizer
         self.summarize_after_turns, self.summary_keep_recent, self.max_tool_rounds = summarize_after_turns, summary_keep_recent, max_tool_rounds
 
@@ -511,7 +547,15 @@ class ConversationBackend:
                       persona: str = "", global_profile: str = "", memories: Sequence[EvidenceMemory] = (),
                       project_rules: str = "", project_documents: Sequence[tuple[str, str]] = (),
                       commitments: Sequence[str] = (), task_state: Sequence[str] = (),
-                      sources: Sequence[str] = (), revalidation_flags: Sequence[str] = ()) -> ConversationResult:
+                      sources: Sequence[str] = (), revalidation_flags: Sequence[str] = (),
+                      delivery_id: str | None = None) -> ConversationResult:
+        if delivery_id is not None and not hasattr(self.store, "append_voice"):
+            raise ConversationError("Voice requires a delivery-aware conversation store")
+        def persist(result: str) -> None:
+            if delivery_id is None:
+                self.store.append(user_id, thread_id, active_project, Turn("user",text), Turn("assistant",result))
+            else:
+                self.store.append_voice(user_id, thread_id, active_project, Turn("user",text), Turn("assistant",result), delivery_id)
         if not text or not text.strip(): raise ValueError("Text must be nonempty")
         previous = self.store.load(user_id, thread_id)
         original_project = previous.project_id if previous.turns else project_id
@@ -519,6 +563,8 @@ class ConversationBackend:
             # A project change starts a clean context thread by requiring an explicit new thread ID.
             raise ConversationError("Thread project is pinned; start a new thread to switch projects")
         active_project = original_project
+        if self.task_state_loader is not None:
+            task_state = self.task_state_loader(user_id, thread_id, active_project)
         if self.memory_repository is not None:
             loaded_persona, loaded_profile, loaded_memories = memory_context(
                 self.memory_repository, user_id=user_id, query=text, project_id=active_project)
@@ -551,7 +597,7 @@ class ConversationBackend:
                 incomplete = completion.finish_reason == "length"
                 if incomplete:
                     result += "\n\n[The provider output limit cut off this response.]"
-                self.store.append(user_id, thread_id, active_project, Turn("user",text), Turn("assistant",result))
+                persist(result)
                 await self._summarize_if_needed(user_id, thread_id)
                 return ConversationResult(result, incomplete, Usage(prompt_tokens,completion_tokens),tuple(observations))
             messages.append({"role":"assistant","content":completion.text or None,"tool_calls":[{"id":c.id,"type":"function","function":{"name":c.name,"arguments":json.dumps(c.arguments)}} for c in completion.tool_calls]})
@@ -562,7 +608,7 @@ class ConversationBackend:
                 messages.append({"role":"tool","tool_call_id":call.id,"name":call.name,"content":json.dumps(observation,ensure_ascii=False)})
             if iteration == self.max_tool_rounds:
                 result = "I couldn't finish within the tool-call limit. The available tool results are recorded; tell me if you want me to continue."
-                self.store.append(user_id,thread_id,active_project,Turn("user",text),Turn("assistant",result))
+                persist(result)
                 await self._summarize_if_needed(user_id, thread_id)
                 return ConversationResult(result,True,Usage(prompt_tokens,completion_tokens),tuple(observations))
         raise AssertionError("unreachable")

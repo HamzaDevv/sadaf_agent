@@ -4,74 +4,61 @@ Updated: 2026-10-11 (Asia/Kolkata).
 
 ## Resume here
 
-Milestones 1–5 are implemented and committed offline. Milestone 5 adds typed M2
-requests, durable receipts/events, and a fake lifecycle in `../sadaf/tasks.py`.
-No M2 repository/API contract was found, so there is no real adapter or invented
-endpoint. Next implement milestone 6 using Session 6 in
-`../docs/IMPLEMENTATION_PROMPTS.md`.
+Milestones 1–6 are complete offline. Milestone 6 wraps the standalone conversation
+backend with voice lifecycle and playback-aware history. The legacy `main.py`
+voice loop and real memory store remain untouched. No live provider, microphone,
+actual macOS speech process, or M2 service was exercised. Direct OpenAI voice
+credentials are absent; no M2 contract is available.
 
-Before continuing, inspect `git status` and preserve unrelated edits. The existing
-voice loop and legacy memory store remain untouched by the new conversation path.
-Do not push. Stage only explicit milestone files.
+Next: obtain a real M2 contract and/or a consented Live/microphone/player adapter,
+validate its semantic mapping, and explicitly opt into synthetic live evaluation.
+No additional live work is implicitly authorized. Application wiring, actual
+recognition/playback behavior, and real task delivery remain unverified. Never
+run `test_deepseek.py` as an offline check or open/migrate legacy memory to inspect
+code. Preserve `.m2_cache/`, `repair/`, review notes, and local databases.
 
-Earlier baseline V7/provider source work is now committed as work-in-progress:
-`944ceb853a6cfe5e64e5d82c81077776ab94dd31`. It is not a completed milestone and
-was not live-tested. Remaining untracked `.m2_cache/`, `repair/`, review notes,
-and `test_deepseek.py` were intentionally left out. Do not run
-`test_deepseek.py`: it makes live provider calls and opens the legacy memory store.
+## Milestone 6 interfaces
 
-## Milestone 4 interfaces
+- `../sadaf/voice.py`: `VoiceTransport`, `VoiceEvent`, `FakeVoiceTransport`,
+  `MacOSSpeechTransport`, and `VoiceSession`.
+- `../sadaf/conversation.py`: atomic voice exchanges, generated output ledger,
+  monotonic acknowledged-prefix projection, and optional scoped task-state loader.
+- `../sadaf/tasks.py`: `conversation_state` supplies durable scoped observations;
+  host reconciles separately. Success with result/remote errors is now failed.
+- `../sadaf/voice_evaluation.py`: explicit live/microphone gates and identical
+  synthetic candidate cases with injected measurement runner.
+- `../docs/VOICE_TRANSPORT.md`: construction, host boundaries, events, storage,
+  macOS limitations, official delegation source, opt-in measurement procedure.
+- `../tests_offline/test_voice.py` and `../tests_offline/test_voice_integration.py`:
+  event lifecycle plus integrated real-library fixtures.
 
-- `../sadaf/conversation.py`: typed context assembly, thread store, provider and
-  tool protocols, OpenRouter adapter, memory adapter, project loader, and legacy
-  tool compatibility adapter.
-- `../docs/CONVERSATION_BACKEND.md`: construction, authority boundaries, live
-  smoke command, and limitations.
-- `../tests_offline/test_conversation.py`: SQLite thread restart/compaction,
-  provider normalization/retry/stream, tool validation/timeout boundaries,
-  camera gate, memory evidence, and loop exhaustion fixtures.
-- `ProjectContextLoader` refreshes full binding policy text plus selected project
-  sections on each turn. Project policy conflicts or missing/stale required
-  context block the turn. Threads retain their original project; project change
-  requires a new thread ID.
-- The optional summarizer runs only after a configured threshold and persists a
-  summary clearly labeled unverified. Exact recent turns remain stored. The host
-  decides when and how to summarize and whether summaries need review.
-- `sadaf live-smoke --confirm-live` sends one fixed synthetic request only when
-  explicitly run. It was not run during milestone 4.
+Voice pause, interruption, disconnect, and shutdown do not cancel M2. Backend
+work completes separately; late output remains unheard. History and summaries
+receive only confirmed played prefixes plus explicit unheard markers. Raw and
+cleaned transcript revisions remain separate. Revised finals never repeat tools;
+post-dispatch corrections flag effect review. Restart freezes pending playback
+and marks unfinished requests uncertain without resubmission.
 
-## Verification and limitations
+Each session pins its project; use a new thread to switch. A single host owns a
+voice thread. Transport adapters must drain/stop playback, honor bounded methods,
+and acknowledge actual player delivery rather than generated transcript timing.
+macOS completion is a conservative process-level proxy, not proof of attention
+or device health. Shutdown awaits backend jobs, so injected provider deadlines
+matter. Owner authorization, policy/task revalidation orchestration, and explicit
+uncertain-request review remain host responsibilities.
 
-- 103 offline tests passed; compileall, locked offline sync, doctor, fake text,
-  and offline wheel build passed. `live-smoke` without confirmation exited 2
-  before network access. No live request was made.
-- Current OpenRouter Chat Completions, tool calling, and model details were
-  checked in official docs/catalog pages, but account access and live behavior
-  remain unverified.
-- The backend and task lifecycle are not wired into the legacy voice loop. A
-  supplied M2 contract is still needed for a real adapter.
-- Legacy tools are optional and lazy. Some dependencies may be unavailable in
-  an offline install. A worker-thread timeout cannot stop an already-running
-  side effect. Camera execution requires a host-supplied confirmation callback.
-- Project policy prose conflicts still need owner review; project document CAS
-  and snapshots retain milestone 3's cooperative/optimistic limitations.
-- No real legacy memory was opened or migrated; no cloud or M2 API was invented.
+## Verification
 
-## Milestone 5 interface and verification
-
-- Implementation commit: `cf8ef41b5c7071546d2ad0cf31e77d4204152ab9`.
-- `../sadaf/tasks.py`: `TaskRequest`, `PolicyRevision`, `M2Client`,
-  `FakeM2Client`, `SQLiteTaskStore`, and `TaskOrchestrator`.
-- `../docs/M2_TASKS.md`: protocol boundary, persistence, queueing, cancellation,
-  result evidence, and fake limitations.
-- Receipts retain their request's original user/project/thread, repository and
-  policy revisions. Revalidation is a durable flag; the host decides whether
-  changed context requires pause/review.
-- Offline verification: locked sync, compileall, 113 tests, doctor, fake text,
-  and wheel build passed. No provider/M2 call or real-memory access occurred.
-- The fake cannot test remote delivery, server idempotency, or actual execution.
-  A real adapter must honor idempotency if the process stops after remote submit
-  but before saving its run ID.
+- 127 offline tests passed; compileall, locked offline sync, doctor, fake text,
+  offline wheel build, and focused whitespace check passed.
+- Fixtures only: temporary SQLite/local Markdown, fake provider/M2/audio process.
+  Integrated scenario covers correction, project switching/isolation, retained
+  policies, concurrent fake tasks, interruption, restart, idempotency, original
+  project/revision attribution, and success/failure evidence reporting.
+- Official GPT-Live client-delegation docs checked. No direct OpenAI credential
+  configured; no account capability request or live evaluation made. Evaluation
+  runner and audio subprocess tests are simulated; no model ranking exists.
+- Implementation commit: pending local commit for this session. Do not push.
 
 ## Earlier implementation commits
 
@@ -79,12 +66,8 @@ and `test_deepseek.py` were intentionally left out. Do not run
 - Milestone 2: `fd5fa2672d62c2cbf79a48aa77fc5228408c98ff`.
 - Milestone 3: `578282502bc7ff81bbacb24107cbe2fd80a6ccc3`.
 - Milestone 4: `d6490961a3fb1c6921f9ac06316011f23bb74a2b`.
+- Milestone 5 (confirmed in this session): `cf8ef41b5c7071546d2ad0cf31e77d4204152ab9`.
+- Earlier application WIP: `944ceb853a6cfe5e64e5d82c81077776ab94dd31`.
 
-## Suggested resume prompt
-
-```text
-Read AGENTS.md and .project-state/README.md, STATUS.md, and HANDOFF.md.
-Continue milestone 6 using Session 6 in docs/IMPLEMENTATION_PROMPTS.md.
-Preserve unrelated work, verify offline, record live evaluation separately,
-update persistent state, and make a local explicit-file commit without pushing.
-```
+Read `../.project-state/STATUS.md`, roadmap/decisions, and applicable repository
+instructions before continuing. Stage explicit files only and commit locally.

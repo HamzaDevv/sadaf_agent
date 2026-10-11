@@ -4,9 +4,10 @@ Updated: 2026-10-11 (Asia/Kolkata).
 
 ## Current position
 
-Milestones 1–5 are implemented and committed offline. Milestone 5 uses only a
-fake because no M2 repository/API contract is available. The existing voice
-loop and legacy memory store have not been replaced, started, or migrated.
+Milestones 1–6 are implemented offline. M2 and voice use fakes because no M2
+contract or direct OpenAI voice credentials are available. A replaceable voice
+controller now wraps the new conversation backend; the legacy application loop
+and real legacy memory remain untouched. Live evaluation is pending.
 
 Milestone 3 implementation commit: `578282502bc7ff81bbacb24107cbe2fd80a6ccc3`.
 
@@ -191,10 +192,46 @@ Milestone 3 implementation commit: `578282502bc7ff81bbacb24107cbe2fd80a6ccc3`.
   delivery or task execution. Revalidation flags are recorded; host policy
   orchestration still must act on them.
 
-## Next milestone
+## Milestone 6 verification and limits
 
-Milestone 6: replaceable voice transport, interruption handling, and integrated
-offline scenarios. Live microphone/provider evaluation remains opt-in.
+- Added `sadaf.voice`: replaceable semantic transport, fake event queue, explicitly
+  enabled macOS `say` fallback, listening/transcript revisions, interruption,
+  playback stop, context synchronization, bounded reconnect, and graceful shutdown.
+- Added scoped raw/cleaned transcript and durable delivery ledgers. Generated
+  speech starts unheard; only acknowledged prefixes enter conversation history
+  and summaries. Late/stale acknowledgments cannot revive interrupted output.
+  Revised finals annotate corrections without repeating tools. Uncertain restart
+  requests require review rather than automatic replay.
+- Backend work continues while paused/interrupted; M2 cancellation is separate.
+  Task-context injection refreshes scoped receipts. Results containing errors are
+  now failed even when some validation evidence exists.
+- Integrated temporary-fixture scenario covers confirmed memory/correction,
+  project A/B isolation, full policy retention, two concurrent fake M2 tasks,
+  interruption, restart, original policy pins, deduplication, and truthful states.
+- Added opt-in evaluation hook with identical synthetic candidate cases and
+  latency, interruption recovery, recognition, duration, and cost observations.
+  Tests exercise gates/measurement plumbing only; no candidate winner is claimed.
+- `.venv/bin/python -m pytest -q`: 127 passed. Compileall, locked offline sync,
+  doctor, fake text, and offline wheel build passed. Focused whitespace check
+  passed. No microphone, actual `say`, provider, M2, or real legacy memory was used.
+- Official OpenAI client-delegation documentation checked; direct OpenAI key is
+  absent in settings. There is no Live or microphone adapter and no live access,
+  latency, recognition, or cost result. macOS process behavior uses an injected
+  fake in tests; interrupted speech has no known word boundary and conservatively
+  stays unconfirmed. Clean `say` exit establishes process completion, not human
+  hearing or audio-device health.
+- Standalone new backend path only; host owns session exclusivity, bounded
+  transport operations/provider deadlines, task reconciliation/revalidation, and
+  review of uncertain effects. Shutdown awaits already-started backend work.
+- Implementation commit: pending local commit for this session.
+
+## Next concrete step
+
+Supply the real M2 contract and/or direct voice credentials and a consented
+microphone/player adapter. Validate that adapter against the transport contract,
+then explicitly opt into synthetic live evaluation. Before real data use, plan
+application wiring and review uncertain-request recovery; do not open/migrate
+legacy memories without a separate request.
 
 ## Earlier baseline application work commit
 

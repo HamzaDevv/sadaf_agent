@@ -126,3 +126,30 @@ gate dispatch. Cancellation acceptance remains distinct from confirmed
 cancellation. Report success only when a retrievable complete result includes
 artifacts or validation evidence. No endpoint, wire payload, or real adapter is
 assumed.
+
+
+## D015 — Application-owned voice delivery and lifecycle
+
+Accepted: 2026-10-11. Inject a semantic voice transport around the new backend,
+with fake events and an explicitly enabled local macOS speech fallback. Store
+raw/cleaned transcript revisions and generated/acknowledged output separately.
+Only player-confirmed prefixes enter spoken history; interrupted/unconfirmed
+suffixes cannot become completed exchanges or summary evidence. Reconnect
+resynchronizes scoped application state without replaying speech or requests.
+Post-dispatch transcript corrections require effect review, not repeat tool
+execution. Restart leaves uncertain requests for explicit host review. Pause,
+interruption, and shutdown stop voice while backend/M2 work remains independent;
+only an explicit task action requests M2 cancellation. Host owns session
+exclusivity and real adapter deadlines/permissions; legacy audio remains intact.
+
+## D016 — Separate simulated validation from opt-in live evaluation
+
+Accepted: 2026-10-11. Complete integrated scenarios with temporary data, fake
+provider/M2/audio process, and a transport-neutral evaluation hook. Live provider
+and microphone runs need separate explicit opt-ins and a supplied measured
+runner/adapter. Compare identical synthetic names/numbers, language-switch, and
+interruption cases; record useful-answer/recovery latency, recognition, duration,
+and separate labeled costs. Direct OpenAI credentials/access and actual audio
+are unverified, and no model winner is selected. macOS clean process completion
+is a limited playback proxy; interrupted prefixes remain unconfirmed without a
+real player mapping. Binding policies continue to be enforced in the backend.

@@ -349,10 +349,10 @@ class TaskOrchestrator:
         if remote.state == TaskState.SUCCEEDED and result is None:
             # A success without a retrievable result cannot be reported as verified success.
             fields.update(state=TaskState.FAILED, errors=(*remote.errors, 'Result unavailable'))
-        elif remote.state == TaskState.SUCCEEDED and (not result.complete or
+        elif remote.state == TaskState.SUCCEEDED and (result.errors or remote.errors or not result.complete or
                 not (result.validation_evidence or result.artifacts)):
             fields.update(state=TaskState.FAILED,
-                          errors=(*remote.errors, 'Complete result evidence unavailable'))
+                          errors=(*remote.errors, *result.errors, 'Complete result evidence unavailable'))
         changed = any(item[key] != value for key, value in fields.items() if key in item and key != 'result_json')
         changed |= bool(fields.get('result_json') and item['result'] is None)
         if changed:
@@ -388,6 +388,26 @@ class TaskOrchestrator:
         if item is None: raise TaskError('Unknown task')
         return self.store.update(task_id, kind='revalidation', payload={'flags': tuple(flags)},
                                  revalidation_flags=tuple(flags))
+
+    def conversation_state(self, user_id: str, thread_id: str, project_id: str | None) -> tuple[str, ...]:
+        """Scoped durable observations, never promote a remote success string.
+
+        Host reconciles separately so chat context loading needs no remote call.
+        Progress/result prose stays labeled as untrusted service content.
+        """
+        rows = []
+        for item in self.store.list():
+            request = item['request']
+            if (request.user_id, request.project_id, request.thread_id) != (user_id, project_id, thread_id):
+                continue
+            result = item['result']
+            evidence = result.validation_evidence if result else ()
+            artifacts = result.artifacts if result else ()
+            rows.append(f"Task {request.task_id} project={request.project_id} state={item['state']}; "
+                        f"revalidation={item['revalidation_flags']}; errors={item['errors']}; "
+                        f"returned evidence={evidence!r}; artifacts={artifacts!r}; "
+                        f"untrusted service summary={result.summary if result else item['progress']!r}")
+        return tuple(rows)
 
     def reconcile(self) -> tuple[dict, ...]:
         """Refresh known runs after restart, retry unsent queued receipts idempotently."""
