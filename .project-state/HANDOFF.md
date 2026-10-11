@@ -4,59 +4,66 @@ Updated: 2026-10-11 (Asia/Kolkata).
 
 ## Resume here
 
-Milestones 1–3 are complete offline. Milestone 1 implementation commit:
-`b1eeb43bfa7b8cbbac99dba8bcb6164377d60085`. Milestone 2 implementation commit:
-`fd5fa2672d62c2cbf79a48aa77fc5228408c98ff` (verified in this session).
-Milestone 3 implementation commit: `578282502bc7ff81bbacb24107cbe2fd80a6ccc3`.
-Next implement milestone 4 using Session 4 in `../docs/IMPLEMENTATION_PROMPTS.md`.
-Do not repeat architecture research or implement an invented M2/cloud API.
+Milestones 1–4 are implemented and committed offline. Milestone 4 commit:
+`d6490961a3fb1c6921f9ac06316011f23bb74a2b`. Next implement milestone 5 using
+Session 5 in `../docs/IMPLEMENTATION_PROMPTS.md`: typed M2 requests, durable
+receipts/events, and a fake lifecycle. No M2 repository or API contract is
+available, so implement and test only a protocol/fake; do not invent endpoints.
 
-Build a typed context packet and conversation backend with thread continuity,
-OpenRouter/provider normalization, and validated tool adapters. Start with fakes,
-then run a minimal live text smoke only when its contract/access is available.
-Distinguish live results from simulated checks. Preserve unrelated checkout work,
-use explicit staging, and do not push.
+Before continuing, inspect `git status` and preserve unrelated edits. The existing
+voice loop and legacy memory store remain untouched by the new conversation path.
+Do not push. Stage only explicit milestone files.
 
-## Milestone 3 interfaces and verification
+## Milestone 4 interfaces
 
-- `../sadaf/projects.py`: registry, document-source protocol, local revision/CAS
-  adapter, immutable snapshots, policy authority, scoped context selection.
-- `../docs/PROJECT_CONTEXT.md`: format, usage, authorization boundaries, limits.
-- `../tests_offline/test_projects.py`: temporary projects and opaque-revision fake.
-- `ProjectContext.prepare_dispatch` refreshes the explicit original project and
-  blocks missing/stale/unavailable/conflicting/oversized policies. Integrate this
-  into future task preparation; no actual dispatch is implemented yet.
-- Project switching does not redirect pinned snapshots. `revalidate` flags policy
-  changes for review, knowledge changes, and unavailable/blocked required context.
-- 84 tests passed; offline locked sync, compileall, doctor, fake text, and wheel
-  build/template initialization passed. No real memories or live service touched.
+- `../sadaf/conversation.py`: typed context assembly, thread store, provider and
+  tool protocols, OpenRouter adapter, memory adapter, project loader, and legacy
+  tool compatibility adapter.
+- `../docs/CONVERSATION_BACKEND.md`: construction, authority boundaries, live
+  smoke command, and limitations.
+- `../tests_offline/test_conversation.py`: SQLite thread restart/compaction,
+  provider normalization/retry/stream, tool validation/timeout boundaries,
+  camera gate, memory evidence, and loop exhaustion fixtures.
+- `ProjectContextLoader` refreshes full binding policy text plus selected project
+  sections on each turn. Project policy conflicts or missing/stale required
+  context block the turn. Threads retain their original project; project change
+  requires a new thread ID.
+- The optional summarizer runs only after a configured threshold and persists a
+  summary clearly labeled unverified. Exact recent turns remain stored. The host
+  decides when and how to summarize and whether summaries need review.
+- `sadaf live-smoke --confirm-live` sends one fixed synthetic request only when
+  explicitly run. It was not run during milestone 4.
 
-## Context and limits to retain
+## Verification and limitations
 
-- Sadaf owns personal conversation, project context/policies, and reporting;
-  M2 supplies coding execution through its eventual actual service contract.
-- Organization/project binding documents load in full. Keyed MUST conflicts block;
-  prose conflicts require review. Project style overlays supplied global preferences;
-  arbitrary Markdown stays untrusted. Personal memory is not exported here.
-- Registry/source grants and actor authentication are trusted-host responsibilities.
-  Local roots cannot overlap; shared organization policies have separate roots.
-- Local updates serialize cooperating Unix/macOS writers; external editors can race
-  final replacement. Multi-source revision snapshots are optimistic. Do not claim
-  universal file CAS or distributed atomicity. Revision archive retention/audit
-  history remain future work; initial templates are not owner approval.
-- The layer is standalone; running-task pause/revalidation actions, cloud sync,
-  OpenRouter conversation integration, and M2 dispatch remain future milestones.
-- Real M2 needs its repository/API contract; cloud source selection and measured
-  model choice remain unresolved. Direct OpenAI voice requires separate access.
-- Legacy graph reads can prune data. Do not open or migrate real legacy memories.
-- Preserve existing edits/untracked files in `EXISTING_WORK.md`; inspect current
-  status because the inventory is only a baseline. No real-memory data or secrets
-  belong in this handoff.
+- 103 offline tests passed; compileall, locked offline sync, doctor, fake text,
+  and offline wheel build passed. `live-smoke` without confirmation exited 2
+  before network access. No live request was made.
+- Current OpenRouter Chat Completions, tool calling, and model details were
+  checked in official docs/catalog pages, but account access and live behavior
+  remain unverified.
+- The backend is not wired into the legacy voice loop. M2 task execution and
+  voice remain later milestones. An actual M2 contract is still needed for a
+  real adapter.
+- Legacy tools are optional and lazy. Some dependencies may be unavailable in
+  an offline install. A worker-thread timeout cannot stop an already-running
+  side effect. Camera execution requires a host-supplied confirmation callback.
+- Project policy prose conflicts still need owner review; project document CAS
+  and snapshots retain milestone 3's cooperative/optimistic limitations.
+- No real legacy memory was opened or migrated; no cloud or M2 API was invented.
+
+## Earlier implementation commits
+
+- Milestone 1: `b1eeb43bfa7b8cbbac99dba8bcb6164377d60085`.
+- Milestone 2: `fd5fa2672d62c2cbf79a48aa77fc5228408c98ff`.
+- Milestone 3: `578282502bc7ff81bbacb24107cbe2fd80a6ccc3`.
+- Milestone 4: `d6490961a3fb1c6921f9ac06316011f23bb74a2b`.
 
 ## Suggested resume prompt
 
 ```text
 Read AGENTS.md and .project-state/README.md, STATUS.md, and HANDOFF.md.
-Continue milestone 4 using Session 4 in docs/IMPLEMENTATION_PROMPTS.md.
-Preserve existing work, verify offline, and update persistent state before finishing.
+Continue milestone 5 using Session 5 in docs/IMPLEMENTATION_PROMPTS.md.
+Preserve unrelated work, use fakes until an M2 contract is supplied, verify
+offline, update persistent state, and make a local explicit-file commit without pushing.
 ```

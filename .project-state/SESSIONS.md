@@ -65,3 +65,30 @@ be explicitly noted in a later entry.
 - Implementation commit: `578282502bc7ff81bbacb24107cbe2fd80a6ccc3`.
 - Next: milestone 4 typed conversation context, provider/tool normalization,
   thread continuity; integrate project preparation blockers with fakes first.
+
+## 2026-10-11 — Milestone 4 conversation backend
+
+- Confirmed milestones 1–3 and preserved all pre-existing dirty paths.
+- Added typed/budgeted context assembly, a restart-safe scoped SQLite thread store,
+  exact turns, separate durable summaries/commitments, optional threshold-based
+  summarization, memory evidence adaptation, project policy refresh, and thread
+  project pinning.
+- Added the stateless OpenRouter Chat Completions adapter for configurable GPT-6.1
+  Sol / GPT-6 Luna roles: normalized responses, tools, streaming/usage, bounded
+  retries and optional declared fallback. Added schema-validated structured tool
+  observations, lazy legacy signature translation, blocking-call offload, and
+  camera confirmation enforcement.
+- Added one-request `live-smoke --confirm-live` with fixed synthetic text; it was
+  not run. OpenRouter official docs and model pages were checked. No provider
+  generation or account access was tested.
+- Verification: 103 offline tests passed; compileall, locked offline sync, doctor,
+  fake text, and wheel build passed. Live smoke without the explicit flag exited
+  before network access. `git diff --cached --check` passed for eight explicit
+  milestone files.
+- Limitations: no legacy voice or M2 wiring; actual M2 contract absent; summary
+  generation is opt-in; unknown model capabilities need declaration; legacy tool
+  dependencies remain optional and timed-out worker side effects cannot be killed.
+  No real memory was opened or migrated.
+- Implementation commit: `d6490961a3fb1c6921f9ac06316011f23bb74a2b`.
+- Next: milestone 5 typed M2 request and receipt lifecycle with a fake; do not
+  invent the M2 service API.

@@ -90,3 +90,26 @@ context. Actual task lifecycle reactions belong to milestone 5. No cloud wire
 protocol or M2 endpoint is assumed; offline tests use an opaque-revision fake.
 
 Milestone 3 implementation: `578282502bc7ff81bbacb24107cbe2fd80a6ccc3` (offline only).
+
+## D012 — Stateless OpenRouter Chat Completions adapter
+
+Accepted: 2026-10-11. Use OpenRouter's documented Chat Completions endpoint for
+the first text backend. Keep history, summaries, and project snapshots locally;
+do not send provider-managed conversation state or generic model parameters.
+Normalize text, tool calls, streaming events, usage, and provider errors. Start
+with `openai/gpt-6.1-sol` for reasoning and `openai/gpt-6-luna` for extraction,
+but keep role model IDs configurable and live access unverified. Bound retries;
+fall back only to an explicitly configured model.
+
+## D013 — Typed, budgeted conversation context and continuity
+
+Accepted: 2026-10-11. Build context as separate bounded sections and reserve the
+full policy allocation; fail when binding rules do not fit. Keep exact turns,
+thread summaries, and commitments as distinct durable records. Summaries are
+unverified and are generated only through an optional threshold-based host
+summarizer. Threads pin their project, and project rules are refreshed before
+each turn. Tool specifications are validated and injected; camera calls require
+explicit host confirmation. The standalone backend does not itself connect the
+legacy voice loop or dispatch M2 tasks.
+
+Milestone 4 implementation: `d6490961a3fb1c6921f9ac06316011f23bb74a2b` (offline only).

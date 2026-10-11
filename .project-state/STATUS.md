@@ -4,9 +4,9 @@ Updated: 2026-10-11 (Asia/Kolkata).
 
 ## Current position
 
-Milestones 1–3 are implemented and committed; milestone 3 is verified offline. The existing voice loop and
-legacy memory store have not been replaced, started, or migrated during this
-session. Milestones 4–6 remain pending.
+Milestones 1–4 are implemented and committed; milestone 4 is verified offline.
+The existing voice loop and legacy memory store have not been replaced, started,
+or migrated during this session. Milestones 5–6 remain pending.
 
 Milestone 3 implementation commit: `578282502bc7ff81bbacb24107cbe2fd80a6ccc3`.
 
@@ -64,6 +64,20 @@ Milestone 3 implementation commit: `578282502bc7ff81bbacb24107cbe2fd80a6ccc3`.
 - Added temporary-project tests and an opaque-revision fake for service conflicts,
   concurrent local writers, external edits, restarts, isolation, and policy outages.
 
+- Added `sadaf.conversation`: typed, explicitly budgeted context packets; scoped
+  durable SQLite thread turns, project pinning, durable summaries and commitments;
+  injected memory and project-context adapters; and an optional threshold-driven
+  summarizer that does not add a model call on every turn.
+- Added an OpenRouter Chat Completions client with normalized text/tool calls,
+  usage and streaming events; configurable model settings with GPT-6.1 Sol and
+  GPT-6 Luna defaults; bounded retries, optional declared fallback, and capability
+  checks. It sends no provider-managed conversation state or generic model params.
+- Added validated structured tool observations, bounded tool loops, lazy legacy
+  tool signature adapters, worker-thread handling for blocking tools, and a hard
+  camera confirmation gate. The adapter is opt-in and imports handlers on use.
+- Added `sadaf live-smoke --confirm-live`, which can send one fixed synthetic
+  request. No live request was made in this session.
+
 ## Verification
 
 - State Markdown files and all local Markdown links checked for existence.
@@ -105,10 +119,8 @@ Milestone 3 implementation commit: `578282502bc7ff81bbacb24107cbe2fd80a6ccc3`.
 
 ## Next milestone
 
-Milestone 4: conversation backend, OpenRouter adapter, normalized tools,
-thread continuity, and typed context packets. Use Session 4 in
-`docs/IMPLEMENTATION_PROMPTS.md`; first test with injected fakes. Integrate the
-project layer's preparation blockers and scoped snapshots into that backend.
+Milestone 5: typed M2 request/receipt protocol and fake lifecycle. Use Session 5
+in `docs/IMPLEMENTATION_PROMPTS.md`; do not invent an M2 API.
 
 ## Dependencies and limitations
 
@@ -140,3 +152,24 @@ project layer's preparation blockers and scoped snapshots into that backend.
   Revisions archive observed content; actor/reason audit history and archive
   retention management are future work. Templates do not establish owner review.
 - Revalidation flags require future orchestration to pause/review changed policies.
+
+## Milestone 4 verification and limits
+
+- `.venv/bin/python -m pytest -q`: 103 passed.
+- `.venv/bin/python -m compileall -q sadaf tests_offline` passed.
+- `UV_CACHE_DIR=/tmp/sadaf-uv-cache uv sync --locked --offline` passed.
+- `sadaf --no-dotenv doctor` and fake text mode passed. `live-smoke` without
+  `--confirm-live` exited 2 before making a request.
+- Offline wheel build passed. Staged `git diff --check` passed; stage contained
+  only eight milestone 4 files. All checks used local fixtures/fakes.
+- OpenRouter Chat Completions, tool calling, GPT-6.1 Sol and GPT-6 Luna model
+  details were checked against current OpenRouter documentation/catalog pages.
+  No live generation or account capability was tested.
+- Commit: `d6490961a3fb1c6921f9ac06316011f23bb74a2b`.
+- This remains a standalone text backend, not connected to the legacy voice loop
+  or M2. OpenRouter key/access and provider routing are unverified. Unknown
+  model capabilities require explicit declaration. Summary generation is
+  optional and threshold-driven; it is not automatic unless the host injects a
+  summarizer. Legacy tool modules are lazy and some optional dependencies may be
+  unavailable; timed-out worker-thread side effects cannot be forcibly stopped.
+- No real memory was read or migrated. No cloud or M2 interface was invented.
