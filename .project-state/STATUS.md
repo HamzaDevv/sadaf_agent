@@ -4,9 +4,9 @@ Updated: 2026-10-11 (Asia/Kolkata).
 
 ## Current position
 
-Milestones 1–4 are implemented and committed; milestone 4 is verified offline.
-The existing voice loop and legacy memory store have not been replaced, started,
-or migrated during this session. Milestones 5–6 remain pending.
+Milestones 1–5 are implemented and committed offline. Milestone 5 uses only a
+fake because no M2 repository/API contract is available. The existing voice
+loop and legacy memory store have not been replaced, started, or migrated.
 
 Milestone 3 implementation commit: `578282502bc7ff81bbacb24107cbe2fd80a6ccc3`.
 
@@ -117,11 +117,6 @@ Milestone 3 implementation commit: `578282502bc7ff81bbacb24107cbe2fd80a6ccc3`.
 - Temporary directories, synthetic content, and fakes only. No cloud/M2 API,
   live provider, voice, real legacy-memory read, or migration was exercised.
 
-## Next milestone
-
-Milestone 5: typed M2 request/receipt protocol and fake lifecycle. Use Session 5
-in `docs/IMPLEMENTATION_PROMPTS.md`; do not invent an M2 API.
-
 ## Dependencies and limitations
 
 - Real M2 integration needs its repository or API contract; use a fake meanwhile.
@@ -151,7 +146,8 @@ in `docs/IMPLEMENTATION_PROMPTS.md`; do not invent an M2 API.
 - Owner/actor authentication and source grants belong to the trusted application.
   Revisions archive observed content; actor/reason audit history and archive
   retention management are future work. Templates do not establish owner review.
-- Revalidation flags require future orchestration to pause/review changed policies.
+- Revalidation flags are now durable on task receipts; a host must pause/review
+  affected running work before continuing under changed policy.
 
 ## Milestone 4 verification and limits
 
@@ -173,6 +169,32 @@ in `docs/IMPLEMENTATION_PROMPTS.md`; do not invent an M2 API.
   summarizer. Legacy tool modules are lazy and some optional dependencies may be
   unavailable; timed-out worker-thread side effects cannot be forcibly stopped.
 - No real memory was read or migrated. No cloud or M2 interface was invented.
+
+## Milestone 5 verification and limits
+
+- Added typed task requests and policy revision pins, a semantic `M2Client`
+  protocol, and `FakeM2Client`; no service endpoint or wire contract was added.
+- Added transactional SQLite request snapshots, receipts, and lifecycle events;
+  idempotent submit, dependency gating, bounded concurrency, same-checkout
+  serialization, restart reconciliation, cancellation states, original scope,
+  and durable revalidation flags.
+- Results are reported successful only when retrievable, complete, and backed by
+  artifacts or validation evidence. Partial results and success responses
+  without evidence are persisted as failures.
+- `.venv/bin/python -m pytest -q`: 113 passed, including 10 task lifecycle cases.
+  Compileall, locked offline sync, doctor, fake text mode, and offline wheel
+  build passed. All lifecycle tests use temporary databases and the fake.
+- Commit: pending this session's explicit-file local commit. No M2, provider, or
+  legacy memory service was contacted; `test_deepseek.py` was not run.
+- A future adapter must map a supplied M2 contract and honor idempotency across
+  the remote-submit/local-save crash window. The fake cannot verify remote
+  delivery or task execution. Revalidation flags are recorded; host policy
+  orchestration still must act on them.
+
+## Next milestone
+
+Milestone 6: replaceable voice transport, interruption handling, and integrated
+offline scenarios. Live microphone/provider evaluation remains opt-in.
 
 ## Earlier baseline application work commit
 

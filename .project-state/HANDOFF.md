@@ -4,11 +4,11 @@ Updated: 2026-10-11 (Asia/Kolkata).
 
 ## Resume here
 
-Milestones 1–4 are implemented and committed offline. Milestone 4 commit:
-`d6490961a3fb1c6921f9ac06316011f23bb74a2b`. Next implement milestone 5 using
-Session 5 in `../docs/IMPLEMENTATION_PROMPTS.md`: typed M2 requests, durable
-receipts/events, and a fake lifecycle. No M2 repository or API contract is
-available, so implement and test only a protocol/fake; do not invent endpoints.
+Milestones 1–5 are implemented and committed offline. Milestone 5 adds typed M2
+requests, durable receipts/events, and a fake lifecycle in `../sadaf/tasks.py`.
+No M2 repository/API contract was found, so there is no real adapter or invented
+endpoint. Next implement milestone 6 using Session 6 in
+`../docs/IMPLEMENTATION_PROMPTS.md`.
 
 Before continuing, inspect `git status` and preserve unrelated edits. The existing
 voice loop and legacy memory store remain untouched by the new conversation path.
@@ -48,15 +48,29 @@ and `test_deepseek.py` were intentionally left out. Do not run
 - Current OpenRouter Chat Completions, tool calling, and model details were
   checked in official docs/catalog pages, but account access and live behavior
   remain unverified.
-- The backend is not wired into the legacy voice loop. M2 task execution and
-  voice remain later milestones. An actual M2 contract is still needed for a
-  real adapter.
+- The backend and task lifecycle are not wired into the legacy voice loop. A
+  supplied M2 contract is still needed for a real adapter.
 - Legacy tools are optional and lazy. Some dependencies may be unavailable in
   an offline install. A worker-thread timeout cannot stop an already-running
   side effect. Camera execution requires a host-supplied confirmation callback.
 - Project policy prose conflicts still need owner review; project document CAS
   and snapshots retain milestone 3's cooperative/optimistic limitations.
 - No real legacy memory was opened or migrated; no cloud or M2 API was invented.
+
+## Milestone 5 interface and verification
+
+- `../sadaf/tasks.py`: `TaskRequest`, `PolicyRevision`, `M2Client`,
+  `FakeM2Client`, `SQLiteTaskStore`, and `TaskOrchestrator`.
+- `../docs/M2_TASKS.md`: protocol boundary, persistence, queueing, cancellation,
+  result evidence, and fake limitations.
+- Receipts retain their request's original user/project/thread, repository and
+  policy revisions. Revalidation is a durable flag; the host decides whether
+  changed context requires pause/review.
+- Offline verification: locked sync, compileall, 113 tests, doctor, fake text,
+  and wheel build passed. No provider/M2 call or real-memory access occurred.
+- The fake cannot test remote delivery, server idempotency, or actual execution.
+  A real adapter must honor idempotency if the process stops after remote submit
+  but before saving its run ID.
 
 ## Earlier implementation commits
 
@@ -69,7 +83,7 @@ and `test_deepseek.py` were intentionally left out. Do not run
 
 ```text
 Read AGENTS.md and .project-state/README.md, STATUS.md, and HANDOFF.md.
-Continue milestone 5 using Session 5 in docs/IMPLEMENTATION_PROMPTS.md.
-Preserve unrelated work, use fakes until an M2 contract is supplied, verify
-offline, update persistent state, and make a local explicit-file commit without pushing.
+Continue milestone 6 using Session 6 in docs/IMPLEMENTATION_PROMPTS.md.
+Preserve unrelated work, verify offline, record live evaluation separately,
+update persistent state, and make a local explicit-file commit without pushing.
 ```

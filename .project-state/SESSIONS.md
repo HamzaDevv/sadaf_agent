@@ -107,3 +107,26 @@ be explicitly noted in a later entry.
 - Commit: `944ceb853a6cfe5e64e5d82c81077776ab94dd31`.
 - Next remains milestone 5; use fake M2 operations until its actual contract is
   supplied.
+
+## 2026-10-11 — Milestone 5 M2 task lifecycle
+
+- Confirmed milestone 4 (`d6490961...`) and earlier WIP commits exist; kept all
+  pre-existing untracked cache, repair/review notes, and live-test script out of
+  the change. No M2 repository/API contract was present in tracked sources.
+- Added `sadaf.tasks` with typed task requests and policy revisions, a semantic
+  client protocol, deterministic fake, transactional SQLite receipts/events,
+  idempotency, restart reconciliation, bounded concurrency, same-checkout
+  serialization, dependency gating, cancellation transitions, pinned project
+  attribution, and revalidation flags. Success requires a returned complete
+  result with artifacts or validation evidence; partial and unverifiable results
+  remain failures with evidence retained.
+- Added `docs/M2_TASKS.md` describing the interface and limits.
+- Verification: locked offline sync passed; compileall passed; 113 offline
+  tests passed (including 10 task lifecycle cases); doctor and fake text mode
+  passed; offline wheel build passed. No M2 endpoint, provider, real memory, or
+  legacy memory store was accessed. `test_deepseek.py` was not run.
+- Limit: a future real adapter must map the supplied M2 contract and honor
+  idempotency across the submit/save crash window; the local fake does not test
+  remote delivery or actual task execution.
+- Next: milestone 6 voice transport and integrated offline evaluation, keeping
+  microphone/provider evaluation opt-in and separately recorded.

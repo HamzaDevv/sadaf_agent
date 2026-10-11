@@ -113,3 +113,16 @@ explicit host confirmation. The standalone backend does not itself connect the
 legacy voice loop or dispatch M2 tasks.
 
 Milestone 4 implementation: `d6490961a3fb1c6921f9ac06316011f23bb74a2b` (offline only).
+
+## D014 — Contract-first M2 task lifecycle
+
+Accepted: 2026-10-11. Define a typed semantic `M2Client` contract and use only
+the deterministic fake until an actual M2 repository/API contract is supplied.
+Persist complete request snapshots, receipts, and append-only lifecycle events
+transactionally. Idempotency keys identify an identical request; tasks retain
+their original project and policy revisions and can carry revalidation flags.
+Bound concurrency and serialize same-checkout mutations; explicit dependencies
+gate dispatch. Cancellation acceptance remains distinct from confirmed
+cancellation. Report success only when a retrievable complete result includes
+artifacts or validation evidence. No endpoint, wire payload, or real adapter is
+assumed.
