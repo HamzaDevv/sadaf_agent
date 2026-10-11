@@ -8,6 +8,8 @@ Milestone 1, the offline foundation, is implemented and committed. The existing
 voice/memory application has not been replaced, started, or migrated during
 this session. Milestones 2–6 remain pending.
 
+Implementation commit: `b1eeb43bfa7b8cbbac99dba8bcb6164377d60085`.
+
 ## Completed
 
 - Repository instructions direct future sessions to this folder.

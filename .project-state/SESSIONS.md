@@ -27,5 +27,5 @@ be explicitly noted in a later entry.
   fixture. Added offline tests and legacy memory hazard documentation.
 - Verification: locked offline sync passed; 38 tests passed; doctor and
   synthetic text command passed; no live providers or real memories accessed.
-- Commit: pending; record hash after creating the focused commit.
+- Implementation commit: `b1eeb43bfa7b8cbbac99dba8bcb6164377d60085`.
 - Next: milestone 2 SQLite memory and safe synthetic-fixture migration.

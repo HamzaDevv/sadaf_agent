@@ -4,8 +4,8 @@ Updated: 2026-10-11 (Asia/Kolkata).
 
 ## Resume here
 
-Milestone 1 is complete. Implementation commit: pending until the focused local
-commit is created; record its hash here before finishing. Next implement
+Milestone 1 is complete. Implementation commit: `b1eeb43bfa7b8cbbac99dba8bcb6164377d60085`.
+Next implement
 milestone 2 using Session 2 in `../docs/IMPLEMENTATION_PROMPTS.md`. Read current
 status and this handoff; do not repeat the architecture research.
 
