@@ -128,5 +128,6 @@ be explicitly noted in a later entry.
 - Limit: a future real adapter must map the supplied M2 contract and honor
   idempotency across the submit/save crash window; the local fake does not test
   remote delivery or actual task execution.
+- Implementation commit: `cf8ef41b5c7071546d2ad0cf31e77d4204152ab9`.
 - Next: milestone 6 voice transport and integrated offline evaluation, keeping
   microphone/provider evaluation opt-in and separately recorded.

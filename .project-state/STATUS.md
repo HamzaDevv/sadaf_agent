@@ -184,7 +184,7 @@ Milestone 3 implementation commit: `578282502bc7ff81bbacb24107cbe2fd80a6ccc3`.
 - `.venv/bin/python -m pytest -q`: 113 passed, including 10 task lifecycle cases.
   Compileall, locked offline sync, doctor, fake text mode, and offline wheel
   build passed. All lifecycle tests use temporary databases and the fake.
-- Commit: pending this session's explicit-file local commit. No M2, provider, or
+- Milestone commit: `cf8ef41b5c7071546d2ad0cf31e77d4204152ab9`. No M2, provider, or
   legacy memory service was contacted; `test_deepseek.py` was not run.
 - A future adapter must map a supplied M2 contract and honor idempotency across
   the remote-submit/local-save crash window. The fake cannot verify remote

@@ -59,6 +59,7 @@ and `test_deepseek.py` were intentionally left out. Do not run
 
 ## Milestone 5 interface and verification
 
+- Implementation commit: `cf8ef41b5c7071546d2ad0cf31e77d4204152ab9`.
 - `../sadaf/tasks.py`: `TaskRequest`, `PolicyRevision`, `M2Client`,
   `FakeM2Client`, `SQLiteTaskStore`, and `TaskOrchestrator`.
 - `../docs/M2_TASKS.md`: protocol boundary, persistence, queueing, cancellation,
