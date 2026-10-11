@@ -173,3 +173,19 @@ in `docs/IMPLEMENTATION_PROMPTS.md`; do not invent an M2 API.
   summarizer. Legacy tool modules are lazy and some optional dependencies may be
   unavailable; timed-out worker-thread side effects cannot be forcibly stopped.
 - No real memory was read or migrated. No cloud or M2 interface was invented.
+
+## Earlier baseline application work commit
+
+- After the milestone commits, committed 27 explicitly selected earlier
+  application/provider source files from the original dirty-checkout inventory:
+  V7 orchestration, provider adapters, memory/tool/audio changes, and context
+  generation tooling. This is preserved work-in-progress, not a newly completed
+  milestone, and no live behavior is claimed.
+- Verification: `.venv/bin/python -m pytest -q` passed (103 tests);
+  `compileall` passed for the selected changed/new Python sources; staged
+  `git diff --cached --check` passed. No app startup, provider request, voice
+  capture, or legacy memory operation was run.
+- Commit: `944ceb853a6cfe5e64e5d82c81077776ab94dd31`.
+- Left `.m2_cache/`, `repair/` and review text, and `test_deepseek.py` uncommitted.
+  The test script calls live providers and opens the legacy memory store; do not
+  run it as an offline check. Local cache databases and draft notes are not code.

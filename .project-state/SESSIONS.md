@@ -92,3 +92,18 @@ be explicitly noted in a later entry.
 - Implementation commit: `d6490961a3fb1c6921f9ac06316011f23bb74a2b`.
 - Next: milestone 5 typed M2 request and receipt lifecycle with a fake; do not
   invent the M2 service API.
+
+## 2026-10-11 — Commit earlier baseline work
+
+- Reviewed the original `EXISTING_WORK.md` inventory and committed 27 explicitly
+  selected tracked and new source files for the earlier V7/provider integration.
+  Recorded it as work-in-progress, not as completion of an implementation
+  milestone. Applied whitespace-only cleanup to the selected source files.
+- Verification: 103 offline tests passed; compileall passed for the selected
+  changed/new Python files; staged whitespace check passed. No app startup, live
+  provider call, voice capture, or legacy memory access was performed.
+- Excluded `.m2_cache/` databases, repair/review drafts, and `test_deepseek.py`,
+  whose body makes live provider calls and constructs the legacy memory store.
+- Commit: `944ceb853a6cfe5e64e5d82c81077776ab94dd31`.
+- Next remains milestone 5; use fake M2 operations until its actual contract is
+  supplied.

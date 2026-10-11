@@ -14,6 +14,12 @@ Before continuing, inspect `git status` and preserve unrelated edits. The existi
 voice loop and legacy memory store remain untouched by the new conversation path.
 Do not push. Stage only explicit milestone files.
 
+Earlier baseline V7/provider source work is now committed as work-in-progress:
+`944ceb853a6cfe5e64e5d82c81077776ab94dd31`. It is not a completed milestone and
+was not live-tested. Remaining untracked `.m2_cache/`, `repair/`, review notes,
+and `test_deepseek.py` were intentionally left out. Do not run
+`test_deepseek.py`: it makes live provider calls and opens the legacy memory store.
+
 ## Milestone 4 interfaces
 
 - `../sadaf/conversation.py`: typed context assembly, thread store, provider and
