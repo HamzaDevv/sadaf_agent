@@ -157,6 +157,6 @@ be explicitly noted in a later entry.
   No provider/M2 request, microphone, actual audio process, or real memory use.
 - Checked official OpenAI client-delegation documentation. Direct OpenAI key is
   absent; account access is unverified. No live evaluation or winner claimed.
-- Implementation commit: pending local commit for this session.
+- Implementation commit: `6f83d1c` (`Implement offline voice transport lifecycle`).
 - Next: supplied real M2 contract or consented Live/player adapter, contract
   validation and explicit synthetic live evaluation, then application wiring.

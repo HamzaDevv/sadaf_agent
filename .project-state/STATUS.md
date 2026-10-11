@@ -223,7 +223,7 @@ Milestone 3 implementation commit: `578282502bc7ff81bbacb24107cbe2fd80a6ccc3`.
 - Standalone new backend path only; host owns session exclusivity, bounded
   transport operations/provider deadlines, task reconciliation/revalidation, and
   review of uncertain effects. Shutdown awaits already-started backend work.
-- Implementation commit: pending local commit for this session.
+- Implementation commit: `6f83d1c` (`Implement offline voice transport lifecycle`).
 
 ## Next concrete step
 

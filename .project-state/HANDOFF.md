@@ -58,7 +58,7 @@ uncertain-request review remain host responsibilities.
 - Official GPT-Live client-delegation docs checked. No direct OpenAI credential
   configured; no account capability request or live evaluation made. Evaluation
   runner and audio subprocess tests are simulated; no model ranking exists.
-- Implementation commit: pending local commit for this session. Do not push.
+- Implementation commit: `6f83d1c` (`Implement offline voice transport lifecycle`). Do not push.
 
 ## Earlier implementation commits
 
