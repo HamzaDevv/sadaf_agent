@@ -25,4 +25,7 @@ vector = ["chromadb>=1,<2", "google-genai>=1.19,<3"]
 dev = ["pytest>=8.4,<10", "pytest-asyncio>=1,<2"]
 
 [tool.setuptools]
-packages = ["sadaf"]
+packages = ["sadaf", "sadaf.project_templates"]
+
+[tool.setuptools.package-data]
+"sadaf.project_templates" = ["*.md"]

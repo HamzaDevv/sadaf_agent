@@ -66,3 +66,25 @@ without constructing the pruning legacy store. Planning is the default; apply
 requires an explicit flag, an independent target, and a backup when the target
 already exists. Repeated imports of the same source content are idempotent.
 Real legacy memory is not read or migrated during development.
+
+## D010 — Explicit project and policy capabilities
+
+Accepted: 2026-10-11. A durable user-scoped registry grants nonoverlapping local
+context roots and records repository references, owners, and shared organization
+policy attachments. Active selection is per user/thread; task preparation takes
+an explicit original project ID. File text cannot change authority. Required
+organization/project policies are retained in full, keyed conflicts and budget
+overflow block, working style overlays global preferences, and other source text
+stays knowledge or untrusted content. Prose conflicts need human review.
+
+## D011 — Optimistic revisioned local documents
+
+Accepted: 2026-10-11. Use a document-source protocol, SHA-256 local manifests,
+observed revision archives, and double-collect snapshots. Preparation refreshes
+required policies and never falls back to stale or empty context. Explicit owner
+amendments require expected revisions and a reason; actor authentication is the
+host's responsibility. Local advisory locking protects cooperating writers,
+not arbitrary external editors; multi-source snapshots are optimistic. Existing
+tasks retain original scope and receive revalidation flags for changed policy or
+context. Actual task lifecycle reactions belong to milestone 5. No cloud wire
+protocol or M2 endpoint is assumed; offline tests use an opaque-revision fake.

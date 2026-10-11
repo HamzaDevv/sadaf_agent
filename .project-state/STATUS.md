@@ -4,11 +4,11 @@ Updated: 2026-10-11 (Asia/Kolkata).
 
 ## Current position
 
-Milestones 1 and 2 are implemented and committed. The existing voice loop and
+Milestones 1–3 are implemented; milestone 3 is verified offline. The existing voice loop and
 legacy memory store have not been replaced, started, or migrated during this
-session. Milestones 3–6 remain pending.
+session. Milestones 4–6 remain pending.
 
-Implementation commit: `b1eeb43bfa7b8cbbac99dba8bcb6164377d60085`.
+Milestone 3 implementation commit: recorded in the follow-up handoff commit.
 
 ## Completed
 
@@ -50,6 +50,20 @@ Implementation commit: `b1eeb43bfa7b8cbbac99dba8bcb6164377d60085`.
   correction, expiry, forgetting, user/project isolation, outbox lifecycle,
   backup, repeat import, and the migration CLI.
 
+- Added durable user-scoped project registration, authorized/nonoverlapping roots,
+  repository references, shared organization policy registration, and per-thread
+  active-project state. Activation verifies context before changing selection.
+- Added seven packaged Markdown templates and a document-source protocol with
+  a local SHA-256 revision archive, historical reads, and conditional updates.
+- Added deterministic full policy loading, keyed conflict checks, reserved policy
+  character budget, explicit owner-authorized document amendments, project style
+  overlays, and separate knowledge/untrusted section retrieval.
+- Added fresh manifest snapshots before preparation, fail-closed stale/unavailable
+  policy handling, and original-project revalidation flags after policy or context
+  edits. Local source/root mismatches and path/symlink escapes are rejected.
+- Added temporary-project tests and an opaque-revision fake for service conflicts,
+  concurrent local writers, external edits, restarts, isolation, and policy outages.
+
 ## Verification
 
 - State Markdown files and all local Markdown links checked for existence.
@@ -74,12 +88,27 @@ Implementation commit: `b1eeb43bfa7b8cbbac99dba8bcb6164377d60085`.
 - Focused `git diff --check` for milestone 2 files passed. Tests used temporary
   synthetic databases and copied JSON fixtures only.
 
+## Milestone 3 verification
+
+- `.venv/bin/python -m pytest -q`: 84 passed (18 new project-context cases).
+- `.venv/bin/python -m compileall -q sadaf tests_offline` passed.
+- `UV_CACHE_DIR=/tmp/sadaf-uv-cache uv sync --locked --offline` passed.
+- `.venv/bin/python -m sadaf --no-dotenv doctor` and fake text mode with a
+  synthetic message passed; no clients or persistent stores were started.
+- `UV_CACHE_DIR=/tmp/sadaf-uv-cache uv build --wheel --offline --out-dir
+  /tmp/sadaf-m3-wheel` passed without warnings after fixing resource loading.
+  A temporary subprocess loaded the wheel and initialized all seven templates.
+- Focused `git diff --check` passed. Explicit staging includes only milestone 3
+  code, templates, tests, documentation, packaging, and canonical state.
+- Temporary directories, synthetic content, and fakes only. No cloud/M2 API,
+  live provider, voice, real legacy-memory read, or migration was exercised.
+
 ## Next milestone
 
-Milestone 3: local Markdown project context, policy authority, revision
-snapshots, and project isolation. Use Session 3 in
-`docs/IMPLEMENTATION_PROMPTS.md`. Keep using temporary directories and fakes;
-the real legacy memory directory remains untouched.
+Milestone 4: conversation backend, OpenRouter adapter, normalized tools,
+thread continuity, and typed context packets. Use Session 4 in
+`docs/IMPLEMENTATION_PROMPTS.md`; first test with injected fakes. Integrate the
+project layer's preparation blockers and scoped snapshots into that backend.
 
 ## Dependencies and limitations
 
@@ -99,3 +128,15 @@ the real legacy memory directory remains untouched.
   deletion or redaction is not implemented. The SQLite adapter is not yet wired
   into the legacy conversation loop, and Markdown-only memory exports are not
   imported by the JSON fixture importer.
+
+- Milestone 3 is a standalone offline library (`sadaf/projects.py`), not a legacy
+  loop integration, running-task engine, cloud adapter, or M2 dispatcher.
+- Policy conflicts are detected for explicit keyed MUST rules; prose semantic
+  consistency needs owner review. Policy budget measures characters, not tokens.
+- Local conditional writes serialize cooperating Unix/macOS writers. External
+  editors ignoring the lock can race the final replace; cross-source snapshots
+  are optimistic, not distributed transactions.
+- Owner/actor authentication and source grants belong to the trusted application.
+  Revisions archive observed content; actor/reason audit history and archive
+  retention management are future work. Templates do not establish owner review.
+- Revalidation flags require future orchestration to pause/review changed policies.

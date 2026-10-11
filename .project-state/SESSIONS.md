@@ -45,3 +45,23 @@ be explicitly noted in a later entry.
   passed. Synthetic fixtures only; live providers and real memories untouched.
 - Implementation commit: `fd5fa2672d62c2cbf79a48aa77fc5228408c98ff`.
 - Next: milestone 3 local project Markdown, policy authority, revisions, and isolation.
+
+## 2026-10-11 — Milestone 3 local project context
+
+- Confirmed milestone 2 implementation commit exists:
+  `fd5fa2672d62c2cbf79a48aa77fc5228408c98ff`. Preserved earlier dirty files.
+- Added user-scoped durable registration/active selection, explicit root grants,
+  repository references, shared organization policies, and seven packaged templates.
+- Added local historical revision reads/CAS, full mandatory policy loading,
+  keyed conflict/budget checks, owner amendment workflow, preference overlays,
+  selective project knowledge/untrusted sections, snapshots, and revalidation flags.
+- Offline verification: 84 tests passed; compileall, locked sync, doctor, fake
+  text mode, wheel build, and temporary wheel template initialization passed.
+  Packaging probe exposed and fixed resource loading before final verification.
+- Tests used temporary projects, databases, and an opaque-revision fake. No cloud
+  API invented, no provider/voice/M2 run, no real-memory read or migration.
+- Limits: prose conflicts need review, local CAS is cooperative, snapshots are
+  optimistic, host authenticates owners, and orchestration must act on flags.
+- Implementation commit: recorded in the follow-up handoff commit.
+- Next: milestone 4 typed conversation context, provider/tool normalization,
+  thread continuity; integrate project preparation blockers with fakes first.
